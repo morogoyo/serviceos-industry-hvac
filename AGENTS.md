@@ -2,15 +2,14 @@
 
 ## What This Repo Is
 
-A skeleton WordPress plugin template for creating industry-specific modules that integrate with the [ServiceOS CRM](https://github.com/morogoyo/wp_crm_general). The `main` branch is the pristine skeleton. Each industry gets its own fork.
-
-## Template-Based Workflow (MANDATORY)
-
-**NEVER commit industry-specific code to `main` in this repo.** Industry work happens in template copies.
-
-### What This Repo Is
-
 A skeleton WordPress plugin template for creating industry-specific modules that integrate with the [ServiceOS CRM](https://github.com/morogoyo/wp_crm_general). The `main` branch is the pristine skeleton. Each industry gets its own repo created from this template.
+
+## Why Templates (Not Forks)
+
+**GitHub does not allow the same account to fork its own repos.** We use template repos:
+- **Fork:** GitHub tracks parent relationship, offers a "Sync fork" button — but blocked for same-account owner
+- **Template:** Copies the repo into a new standalone repo. Skeleton updates via `git fetch upstream && git merge upstream/main`
+- **Result is identical:** each industry has its own independent repo with `main`/`dev`/`feature/*` branches
 
 ### Repo Structure
 
