@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: ServiceOS Industry Plugin
- * Description: Industry-specific module for ServiceOS CRM. Customize for your industry.
+ * Plugin Name: ServiceOS HVAC
+ * Description: HVAC-specific module for ServiceOS CRM (service categories, pipeline stages, field checklists)
  * Version: 1.0.0
  * Author: ServiceOS
  * Requires Plugins: service-os-crm

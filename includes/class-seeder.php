@@ -7,7 +7,7 @@ class Seeder {
     }
 
     public static function seed(array $seed_data, string $module_slug) {
-        if ($module_slug !== 'industry-plugin') {
+        if ($module_slug !== 'hvac') {
             return $seed_data;
         }
 
@@ -18,28 +18,58 @@ class Seeder {
             'categories' => [
                 [
                     'name' => 'General',
-                    'singular_label' => 'Service',
-                    'plural_label' => 'Services',
+                    'singular_label' => 'General Service',
+                    'plural_label' => 'General Services',
                     'icon' => 'folder',
                     'color' => '#0073aa',
                 ],
-                // Add more categories for your industry:
-                // ['name' => 'Installation', 'singular_label' => 'Install', 'icon' => 'build'],
-                // ['name' => 'Repair', 'singular_label' => 'Repair Job', 'icon' => 'handyman'],
+                [
+                    'name' => 'Installation',
+                    'singular_label' => 'Installation',
+                    'plural_label' => 'Installations',
+                    'icon' => 'build',
+                    'color' => '#2e7d32',
+                ],
+                [
+                    'name' => 'Repair',
+                    'singular_label' => 'Repair',
+                    'plural_label' => 'Repairs',
+                    'icon' => 'handyman',
+                    'color' => '#d84315',
+                ],
+                [
+                    'name' => 'Maintenance',
+                    'singular_label' => 'Maintenance',
+                    'plural_label' => 'Maintenance',
+                    'icon' => 'settings',
+                    'color' => '#1565c0',
+                ],
+                [
+                    'name' => 'Inspection',
+                    'singular_label' => 'Inspection',
+                    'plural_label' => 'Inspections',
+                    'icon' => 'visibility',
+                    'color' => '#6a1b9a',
+                ],
             ],
             'pipeline' => [
-                'name' => 'Sales Pipeline',
+                'name' => 'HVAC Sales Pipeline',
                 'stages' => [
                     'Lead',
-                    'Qualified',
-                    'Proposal',
-                    'Closed Won',
-                    'Closed Lost',
+                    'Site Survey',
+                    'Quote',
+                    'Approved',
+                    'Installation',
+                    'Inspection',
+                    'Won',
+                    'Lost',
                 ],
             ],
             'services' => [
-                // Add seed services for your industry:
-                // ['title' => 'Service Name', 'category_slug' => 'general', 'value' => 0],
+                ['title' => 'AC Installation', 'category_slug' => 'installation', 'value' => 4500],
+                ['title' => 'Furnace Replacement', 'category_slug' => 'installation', 'value' => 3500],
+                ['title' => 'Diagnostic Visit', 'category_slug' => 'repair', 'value' => 99],
+                ['title' => 'Annual Tune-Up', 'category_slug' => 'maintenance', 'value' => 179],
             ],
         ];
     }

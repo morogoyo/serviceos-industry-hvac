@@ -4,20 +4,20 @@ namespace ServiceOS_Industry_Plugin;
 use Service_OS_CRM\Harness\Service_OS_CRM_Harness;
 
 class Harness extends Service_OS_CRM_Harness {
-    protected $module_slug = 'industry-plugin';
-    protected $module_name = 'Industry Plugin';
-    protected $module_icon = 'extension';
-    protected $industry = 'general';
+    protected $module_slug = 'hvac';
+    protected $module_name = 'HVAC';
+    protected $module_icon = 'ac_unit';
+    protected $industry = 'HVAC';
 
     protected function get_module_info(): array {
         return [
             'name' => $this->module_name,
             'slug' => $this->module_slug,
             'industry' => $this->industry,
-            'description' => 'Industry-specific module for ServiceOS CRM',
+            'description' => 'HVAC field service management with checklists, service reports, and pipeline tracking',
             'menu_label' => $this->module_name,
             'menu_icon' => $this->module_icon,
-            'plugin_file' => 'serviceos-industry-plugin/serviceos-industry-plugin.php',
+            'plugin_file' => 'serviceos-industry-hvac/serviceos-industry-hvac.php',
             'plugin_class' => __CLASS__,
             'version' => SERVICEOS_IP_VERSION,
         ];
@@ -25,7 +25,7 @@ class Harness extends Service_OS_CRM_Harness {
 
     protected function get_pages(): array {
         return [
-            ['slug' => 'list', 'title' => $this->module_name, 'icon' => $this->module_icon],
+            ['slug' => 'list', 'title' => 'HVAC Dashboard', 'icon' => $this->module_icon],
             ['slug' => 'detail', 'title' => 'Detail View', 'icon' => 'visibility'],
         ];
     }
@@ -66,7 +66,7 @@ class Harness extends Service_OS_CRM_Harness {
         $data['type'] = 'detail';
         $data['title'] = 'Item #' . esc_html($item_id);
         $data['toolbar'] = [
-            ['type' => 'back', 'url' => admin_url('admin.php?page=service-os-crm-module-industry-plugin'), 'label' => 'Back to List'],
+            ['type' => 'back', 'url' => admin_url('admin.php?page=service-os-crm-module-hvac'), 'label' => 'Back to List'],
         ];
         $data['sidebar_meta'] = [
             ['label' => 'ID', 'value' => $item_id],
