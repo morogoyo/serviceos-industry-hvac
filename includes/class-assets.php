@@ -26,5 +26,11 @@ class Assets {
             SERVICEOS_IP_VERSION,
             true
         );
+
+        wp_localize_script('serviceos-ip-module', 'ServiceOSHVACConfig', [
+            'businessId' => (int) get_option('service_os_crm_business_id', 1),
+            'moduleSlug' => 'hvac',
+            'modulePage' => admin_url('admin.php?page=service-os-crm-module-hvac'),
+        ]);
     }
 }
