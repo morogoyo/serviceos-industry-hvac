@@ -12,18 +12,21 @@ class Assets {
             return;
         }
 
+        $css_file = SERVICEOS_IP_PATH . 'assets/css/module.css';
+        $js_file  = SERVICEOS_IP_PATH . 'assets/js/module.js';
+
         wp_enqueue_style(
             'serviceos-ip-module',
             SERVICEOS_IP_URL . 'assets/css/module.css',
             ['service-os-crm-dashboard'],
-            SERVICEOS_IP_VERSION
+            file_exists($css_file) ? filemtime($css_file) : SERVICEOS_IP_VERSION
         );
 
         wp_enqueue_script(
             'serviceos-ip-module',
             SERVICEOS_IP_URL . 'assets/js/module.js',
             ['service-os-crm-api'],
-            SERVICEOS_IP_VERSION,
+            file_exists($js_file) ? filemtime($js_file) : SERVICEOS_IP_VERSION,
             true
         );
 
