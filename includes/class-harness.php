@@ -26,7 +26,7 @@ class Harness extends Service_OS_CRM_Harness {
     protected function get_pages(): array {
         return [
             ['slug' => 'list', 'title' => 'HVAC Dashboard', 'icon' => $this->module_icon],
-            ['slug' => 'detail', 'title' => 'Detail View', 'icon' => 'visibility'],
+            ['slug' => 'detail', 'title' => 'Service Detail', 'icon' => 'visibility'],
         ];
     }
 
@@ -40,20 +40,52 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     protected function get_list_data(array $params): array {
+        global $wpdb;
+
+        $business_id = (int) get_option('service_os_crm_business_id', 0);
+
+        $services = $wpdb->get_results($wpdb->prepare(
+            "SELECT s.id, s.title, s.status, s.value, s.pipeline_id, s.stage_id,
+                    c.name AS category_name, c.slug AS category_slug, c.color AS category_color
+             FROM {$wpdb->prefix}crm_services s
+             LEFT JOIN {$wpdb->prefix}crm_service_categories c ON s.category_id = c.id
+             WHERE s.module_slug = 'hvac'
+             AND s.business_id = %d
+             ORDER BY c.name, s.title",
+            $business_id
+        ));
+
+        $total = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}crm_services
+             WHERE module_slug = 'hvac' AND business_id = %d",
+            $business_id
+        ));
+
+        $rows = [];
+        foreach ($services as $svc) {
+            $rows[] = [
+                $svc->id,
+                $svc->title,
+                $svc->category_name ?? '—',
+                $svc->status,
+                '$' . number_format((float) $svc->value, 2),
+            ];
+        }
+
         $data = $this->get_standard_schema();
         $data['type'] = 'list';
-        $data['title'] = $this->module_name;
-        $data['subtitle'] = 'Manage your ' . $this->module_name . ' items';
-        $data['hero_stat'] = ['label' => 'Total', 'value' => '0'];
+        $data['title'] = 'HVAC Dashboard';
+        $data['subtitle'] = 'Service catalog and deal pipeline for HVAC operations';
+        $data['hero_stat'] = ['label' => 'Services', 'value' => (string) $total];
         $data['toolbar'] = [
-            ['type' => 'action', 'label' => 'Add New', 'onclick' => 'alert(\'Add new item\')'],
+            ['type' => 'action', 'label' => 'New Service', 'onclick' => 'window.ServiceOSHVAC.openNewServiceModal()'],
         ];
         $data['sections'] = [
             [
                 'type' => 'data_table',
-                'label' => 'Items',
-                'columns' => ['ID', 'Title', 'Status', 'Value'],
-                'rows' => [],
+                'label' => 'HVAC Services',
+                'cols' => ['ID', 'Service', 'Category', 'Status', 'Value'],
+                'rows' => $rows,
             ],
         ];
 
@@ -61,15 +93,64 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     protected function get_detail_data(array $params): array {
-        $item_id = $params['id'] ?? 0;
+        global $wpdb;
+
+        $item_id = absint($params['id'] ?? 0);
+        if ($item_id === 0) {
+            return ['type' => 'detail', 'title' => 'Not Found'];
+        }
+
+        $svc = $wpdb->get_row($wpdb->prepare(
+            "SELECT s.id, s.title, s.status, s.value, s.milestone, s.duration,
+                    s.pipeline_id, s.stage_id,
+                    c.name AS category_name, c.slug AS category_slug, c.color AS category_color,
+                    p.name AS pipeline_name,
+                    ps.name AS stage_name
+             FROM {$wpdb->prefix}crm_services s
+             LEFT JOIN {$wpdb->prefix}crm_service_categories c ON s.category_id = c.id
+             LEFT JOIN {$wpdb->prefix}crm_pipelines p ON s.pipeline_id = p.id
+             LEFT JOIN {$wpdb->prefix}crm_pipeline_stages ps ON s.stage_id = ps.id
+             WHERE s.id = %d",
+            $item_id
+        ));
+
+        if (!$svc) {
+            return ['type' => 'detail', 'title' => 'Not Found'];
+        }
+
         $data = $this->get_standard_schema();
         $data['type'] = 'detail';
-        $data['title'] = 'Item #' . esc_html($item_id);
+        $data['title'] = $svc->title;
+        $data['subtitle'] = ($svc->category_name ?? 'Uncategorized') . ' · ' . ucfirst($svc->status);
+        $data['tags'] = [$svc->category_name ?? 'General'];
+        $data['hero_stat'] = ['label' => 'Value', 'value' => '$' . number_format((float) $svc->value, 2)];
         $data['toolbar'] = [
-            ['type' => 'back', 'url' => admin_url('admin.php?page=service-os-crm-module-hvac'), 'label' => 'Back to List'],
+            ['type' => 'back', 'url' => admin_url('admin.php?page=service-os-crm-module-hvac'), 'label' => 'Back to Dashboard'],
+            ['type' => 'action', 'label' => 'Create Deal', 'onclick' => 'window.ServiceOSHVAC.createDeal(' . $item_id . ')'],
         ];
+
+        $data['sections'] = [
+            [
+                'type' => 'info_table',
+                'label' => 'Service Info',
+                'columns' => ['Field', 'Value'],
+                'rows' => [
+                    ['Status', ucfirst($svc->status)],
+                    ['Category', $svc->category_name ?? '—'],
+                    ['Pipeline', $svc->pipeline_name ?? '—'],
+                    ['Current Stage', $svc->stage_name ?? '—'],
+                    ['Milestone', $svc->milestone ? $svc->milestone . '%' : '0%'],
+                    ['Duration', $svc->duration ? $svc->duration . ' hrs' : '—'],
+                ],
+            ],
+        ];
+
         $data['sidebar_meta'] = [
-            ['label' => 'ID', 'value' => $item_id],
+            ['label' => 'Service ID', 'value' => (string) $svc->id],
+            ['label' => 'Category', 'value' => $svc->category_name ?? '—'],
+            ['label' => 'Pipeline', 'value' => $svc->pipeline_name ?? '—'],
+            ['label' => 'Stage', 'value' => $svc->stage_name ?? '—'],
+            ['label' => 'Value', 'value' => '$' . number_format((float) $svc->value, 2)],
         ];
 
         return $data;
