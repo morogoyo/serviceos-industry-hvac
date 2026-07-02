@@ -30,7 +30,7 @@ class Harness extends Service_OS_CRM_Harness {
         ];
     }
 
-    protected function get_page_data(string $page_slug, array $params = []) {
+    public function get_page_data(string $page_slug, array $params = []) {
         if ($page_slug === 'list') {
             return $this->get_list_data($params);
         } elseif ($page_slug === 'detail') {
