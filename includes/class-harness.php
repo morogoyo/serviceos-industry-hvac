@@ -87,6 +87,51 @@ class Harness extends Service_OS_CRM_Harness {
                 'cols' => ['ID', 'Service', 'Category', 'Status', 'Value'],
                 'rows' => $rows,
             ],
+            [
+                'type' => 'html',
+                'content' => '
+<div id="crm-modal-hvac-service" class="crm-modal" style="display: none;">
+    <div class="crm-modal-dialog" style="max-width: 500px;">
+        <div class="crm-modal-header">
+            <div>
+                <h3>New HVAC Service</h3>
+                <p>Add a service to the HVAC catalog</p>
+            </div>
+            <button class="crm-modal-close" onclick="ServiceOSModal.close(\'crm-modal-hvac-service\')">&times;</button>
+        </div>
+        <form id="hvac-service-form" onsubmit="ServiceOSHVAC.saveService(event)">
+            <div class="crm-modal-body">
+                <div class="crm-form-group">
+                    <label for="hvac-svc-title">Service Title *</label>
+                    <input type="text" id="hvac-svc-title" name="title" required placeholder="e.g., Central AC Install (3-ton)">
+                </div>
+                <div class="crm-form-row">
+                    <div class="crm-form-group">
+                        <label for="hvac-svc-category">Category</label>
+                        <select id="hvac-svc-category" name="category_id">
+                            <option value="">Select Category</option>
+                        </select>
+                    </div>
+                    <div class="crm-form-group">
+                        <label for="hvac-svc-value">Value ($)</label>
+                        <input type="number" id="hvac-svc-value" name="value" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="crm-form-group">
+                    <label for="hvac-svc-pipeline">Pipeline</label>
+                    <select id="hvac-svc-pipeline" name="pipeline_id">
+                        <option value="">None (no pipeline)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="crm-modal-footer">
+                <button type="button" class="crm-btn-cancel" onclick="ServiceOSModal.close(\'crm-modal-hvac-service\')">Cancel</button>
+                <button type="submit" class="crm-btn-save">Save Service</button>
+            </div>
+        </form>
+    </div>
+</div>',
+            ],
         ];
 
         return $data;
