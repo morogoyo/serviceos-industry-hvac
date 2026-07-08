@@ -19,9 +19,13 @@ require_once SERVICEOS_IP_PATH . 'includes/class-activator.php';
 require_once SERVICEOS_IP_PATH . 'includes/class-seeder.php';
 require_once SERVICEOS_IP_PATH . 'includes/class-harness.php';
 require_once SERVICEOS_IP_PATH . 'includes/class-assets.php';
+require_once SERVICEOS_IP_PATH . 'includes/class-email.php';
+require_once SERVICEOS_IP_PATH . 'includes/class-public.php';
 
 register_activation_hook(__FILE__, ['ServiceOS_Industry_Plugin\\Activator', 'activate']);
 register_deactivation_hook(__FILE__, ['ServiceOS_Industry_Plugin\\Activator', 'deactivate']);
+
+ServiceOS_Industry_Plugin\Public_Checklist::register();
 
 add_action('plugins_loaded', function () {
     if (!class_exists('Service_OS_CRM\\Harness\\Service_OS_CRM_Harness')) {
