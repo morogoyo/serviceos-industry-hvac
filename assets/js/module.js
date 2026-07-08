@@ -54,7 +54,7 @@
         if (categoryId) data.category_id = parseInt(categoryId);
         if (pipelineId) data.pipeline_id = parseInt(pipelineId);
 
-        ServiceOSAPI.deals.create(data)
+        ServiceOSAPI.services.create(data)
             .then(function () {
                 ServiceOSModal.close('crm-modal-hvac-service');
                 ServiceOSToast.success('Service created');
