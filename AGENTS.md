@@ -49,6 +49,10 @@ Each fork uses standard naming:
 - `feature/<name>` — new features
 - `fix/<name>` — bug fixes
 
+### Merging to Main — MANUAL ONLY
+
+**Never auto-merge any PR to `main`. Never create a PR targeting `main` without explicit user authorization.** Merges to `main` are a manual process controlled by the user. The agent may only merge to `dev`. `dev` → `main` syncs happen only when explicitly requested and approved.
+
 ### Syncing Skeleton Updates
 
 When this skeleton repo receives updates:
