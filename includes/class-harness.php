@@ -9,19 +9,6 @@ class Harness extends Service_OS_CRM_Harness {
     protected $module_icon = 'ac_unit';
     protected $industry = 'HVAC';
 
-    private $checklist_labels = [
-        'Air Filter Replaced',
-        'Thermostat Checked',
-        'Condenser Coil Cleaned',
-        'Evaporator Coil Checked',
-        'Blower Operation Verified',
-        'Refrigerant Level Checked',
-        'Electrical Connections Checked',
-        'Drain Line Inspected',
-        'Safety Controls Tested',
-        'System Performance Verified',
-    ];
-
     protected function get_module_info(): array {
         return [
             'name' => $this->module_name,
@@ -80,6 +67,17 @@ class Harness extends Service_OS_CRM_Harness {
             $business_id
         ));
 
+        $submission_count = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}hvac_submissions"
+        );
+
+        $open_deals = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}crm_deals d
+             WHERE d.business_id = %d
+             AND d.status NOT IN ('won', 'lost')",
+            $business_id
+        ));
+
         $rows = [];
         foreach ($services as $svc) {
             $rows[] = [
@@ -96,6 +94,10 @@ class Harness extends Service_OS_CRM_Harness {
         $data['title'] = 'HVAC Dashboard';
         $data['subtitle'] = 'Service catalog and deal pipeline for HVAC operations';
         $data['hero_stat'] = ['label' => 'Services', 'value' => (string) $total];
+        $data['tags'] = [
+            (string) $submission_count . ' Field Checklists',
+            (string) $open_deals . ' Open Deals',
+        ];
         $data['toolbar'] = [
             ['type' => 'action', 'label' => 'New Service', 'onclick' => 'window.ServiceOSHVAC.openNewServiceModal()'],
         ];
@@ -233,43 +235,48 @@ class Harness extends Service_OS_CRM_Harness {
         $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
 
         $submissions = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$table} ORDER BY submitted_at DESC LIMIT %d OFFSET %d",
+            "SELECT s.*, u.display_name AS technician_name
+             FROM {$table} s
+             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
+             ORDER BY s.created_at DESC
+             LIMIT %d OFFSET %d",
             $per_page, $offset
         ));
 
-        $tech_count = (int) $wpdb->get_var("SELECT COUNT(DISTINCT technician_name) FROM {$table}");
         $recent = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE submitted_at >= %s",
+            "SELECT COUNT(*) FROM {$table} WHERE created_at >= %s",
             date('Y-m-d H:i:s', strtotime('-30 days'))
         ));
+
+        $unique_techs = (int) $wpdb->get_var(
+            "SELECT COUNT(DISTINCT technician_id) FROM {$table} WHERE technician_id > 0"
+        );
 
         $rows = [];
         $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
         foreach ($submissions as $s) {
             $view_link = '<a href="' . esc_url(add_query_arg('id', $s->id, $list_url)) . '">View</a>';
-            $delete_link = '<a href="' . esc_url(add_query_arg(['action' => 'delete', 'id' => $s->id], $list_url)) . '" onclick="return confirm(\'Delete this submission?\')">Delete</a>';
             $rows[] = [
                 '#' . $s->id,
-                $s->property_address,
-                $s->date_of_service,
-                $s->technician_name,
-                $s->work_order ?: '—',
-                $s->submitted_at,
-                $view_link . ' | ' . $delete_link,
+                esc_html($s->ji_contract ?: '—'),
+                esc_html($s->ji_wo ?: '—'),
+                esc_html($s->technician_name ?: 'User #' . $s->technician_id),
+                esc_html($s->created_at),
+                $view_link,
             ];
         }
 
         $data = $this->get_standard_schema();
         $data['type'] = 'list';
         $data['title'] = 'Field Checklists';
-        $data['subtitle'] = 'ServicePro Field Checklist submissions';
+        $data['subtitle'] = 'Technician field checklist submissions';
         $data['hero_stat'] = ['label' => 'Total Submissions', 'value' => (string) $total];
-        $data['tags'] = [(string) $tech_count . ' Technicians', (string) $recent . ' Last 30 Days'];
+        $data['tags'] = [(string) $unique_techs . ' Technicians', (string) $recent . ' Last 30 Days'];
         $data['sections'] = [
             [
                 'type' => 'data_table',
                 'label' => 'Submissions',
-                'cols' => ['ID', 'Property', 'Date', 'Technician', 'Work Order', 'Submitted', 'Actions'],
+                'cols' => ['ID', 'Contract', 'Work Order', 'Technician', 'Submitted', 'Actions'],
                 'rows' => $rows,
             ],
         ];
@@ -290,7 +297,11 @@ class Harness extends Service_OS_CRM_Harness {
         $signoffs_table = $wpdb->prefix . 'hvac_signoffs';
 
         $submission = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$sub_table} WHERE id = %d", $submission_id
+            "SELECT s.*, u.display_name AS technician_name
+             FROM {$sub_table} s
+             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
+             WHERE s.id = %d",
+            $submission_id
         ));
 
         if (!$submission) {
@@ -298,7 +309,7 @@ class Harness extends Service_OS_CRM_Harness {
         }
 
         $unit_items = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$items_table} WHERE submission_id = %d ORDER BY unit_number, item_index",
+            "SELECT * FROM {$items_table} WHERE submission_id = %d ORDER BY unit_number",
             $submission_id
         ));
 
@@ -307,183 +318,138 @@ class Harness extends Service_OS_CRM_Harness {
             $submission_id
         ));
 
-        $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
         $back_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions');
+        $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
         $delete_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id);
+
+        $tech_name = $submission->technician_name ?: 'User #' . $submission->technician_id;
 
         $data = $this->get_standard_schema();
         $data['type'] = 'detail';
         $data['title'] = 'Submission #' . $submission->id;
-        $data['subtitle'] = $submission->technician_name . ' · ' . $submission->date_of_service;
-        $data['hero_stat'] = ['label' => 'Units', 'value' => (string) (int) $submission->unit_count];
-        $data['tags'] = ['HVAC', $submission->company_name ?: 'ServicePro'];
+        $data['subtitle'] = $tech_name . ' · ' . $submission->created_at;
+        $data['hero_stat'] = ['label' => 'Equipment Units', 'value' => (string) count($unit_items)];
+        $data['tags'] = ['HVAC', 'Field Checklist'];
         $data['toolbar'] = [
             ['type' => 'back', 'url' => $back_url, 'label' => 'Back to Submissions'],
             ['type' => 'action', 'label' => 'Print', 'onclick' => 'window.print()'],
             ['type' => 'delete', 'url' => $delete_url, 'confirm' => 'Delete this submission?'],
         ];
 
-        // info_table section — Job Info
         $data['sections'][] = [
             'type' => 'info_table',
             'label' => 'Job Info',
-            'columns' => ['Property', 'Date', 'Technician', 'Work Order', 'Contract', 'Visit Type', 'Company'],
+            'columns' => ['Contract', 'Work Order', 'Technician', 'Client ID', 'Submitted'],
             'rows' => [[
-                $submission->property_address,
-                $submission->date_of_service,
-                $submission->technician_name,
-                $submission->work_order ?: '—',
-                $submission->contract_number ?: '—',
-                $submission->visit_type ?: '—',
-                $submission->company_name ?: '—',
+                $submission->ji_contract ?: '—',
+                $submission->ji_wo ?: '—',
+                $tech_name,
+                $submission->client_id ?: '—',
+                $submission->created_at,
             ]],
         ];
 
-        // unit_overview section — grouped by unit_number
-        $units_overview = $this->group_units($unit_items, (int) $submission->unit_count);
-        $data['sections'][] = [
-            'type' => 'unit_overview',
-            'label' => 'Unit Status Overview',
-            'units' => $units_overview,
-        ];
+        $units_overview = $this->group_units_new($unit_items);
+        if (!empty($units_overview)) {
+            $data['sections'][] = [
+                'type' => 'unit_overview',
+                'label' => 'Equipment Overview',
+                'units' => $units_overview,
+            ];
 
-        // expandable_units section — full checklist details per unit
-        $units_detail = $this->group_units_detail($unit_items, (int) $submission->unit_count);
-        $data['sections'][] = [
-            'type' => 'expandable_units',
-            'label' => 'Unit Details',
-            'units' => $units_detail,
-        ];
-
-        // signoffs section
-        $signoff_items = [];
-        foreach ($signoffs as $so) {
-            $signoff_items[] = [
-                'label' => $so->item_label,
-                'checked' => (bool) $so->checked,
+            $units_detail = $this->group_units_detail_new($unit_items);
+            $data['sections'][] = [
+                'type' => 'expandable_units',
+                'label' => 'Equipment Details',
+                'units' => $units_detail,
             ];
         }
-        $data['sections'][] = [
-            'type' => 'signoffs',
-            'label' => 'Sign-offs',
-            'items' => $signoff_items,
-        ];
+
+        $signoff_items = [];
+        foreach ($signoffs as $so) {
+            $sig_label = ucfirst($so->signoff_type) . ': ' . ($so->printed_name ?: '—');
+            if (!empty($so->signature_data)) {
+                $sig_label .= ' <img src="' . esc_attr($so->signature_data) . '" style="max-height:60px;display:block;margin-top:4px;" alt="Signature">';
+            }
+            $signoff_items[] = [
+                'label'   => $sig_label,
+                'checked' => true,
+            ];
+        }
+        if (!empty($signoff_items)) {
+            $data['sections'][] = [
+                'type' => 'signoffs',
+                'label' => 'Sign-offs',
+                'items' => $signoff_items,
+            ];
+        }
 
         $data['sidebar_meta'] = [
-            ['label' => 'Work Order', 'value' => $submission->work_order ?: '—'],
-            ['label' => 'Contract', 'value' => $submission->contract_number ?: '—'],
-            ['label' => 'Visit Type', 'value' => $submission->visit_type ?: '—'],
-            ['label' => 'Company', 'value' => $submission->company_name ?: '—'],
-            ['label' => 'Submitted', 'value' => $submission->submitted_at],
+            ['label' => 'Submission ID', 'value' => (string) $submission->id],
+            ['label' => 'Contract', 'value' => $submission->ji_contract ?: '—'],
+            ['label' => 'Work Order', 'value' => $submission->ji_wo ?: '—'],
+            ['label' => 'Technician', 'value' => $tech_name],
+            ['label' => 'Client ID', 'value' => $submission->client_id ?: '—'],
+            ['label' => 'Submitted', 'value' => $submission->created_at],
         ];
 
         return $data;
     }
 
-    private function group_units(array $items, int $unit_count): array {
+    private function group_units_new(array $items): array {
         $units = [];
-        for ($i = 1; $i <= $unit_count; $i++) {
-            $items_for_unit = $this->items_for_unit($items, $i);
+        $grouped = [];
+        foreach ($items as $item) {
+            $grouped[(int) $item->unit_number][] = $item;
+        }
+        foreach ($grouped as $unit_num => $unit_items) {
+            $checks = json_decode($unit_items[0]->checks_json, true) ?: [];
             $checked = 0;
-            $total = 0;
-            foreach ($items_for_unit as $item) {
-                $total++;
-                if ($item->checked) $checked++;
+            $total = count($checks);
+            foreach ($checks as $v) {
+                if ($v) $checked++;
             }
             $completion = $total > 0 ? ($checked . '/' . $total) : '0/0';
-            $status = $this->compute_status($items_for_unit);
-            $status_color = $this->status_color($checked, $total);
-            $note = '';
-            $initials = '';
-            foreach ($items_for_unit as $item) {
-                if (!empty($item->notes)) $note = $item->notes;
-                if (!empty($item->initials)) $initials = $item->initials;
-            }
+            $status = $checked >= $total ? 'ok' : ($checked > 0 ? 'mon' : 'action');
+            $colors = ['ok' => '#2ecc71', 'mon' => '#f59e0b', 'action' => '#ef4444'];
 
             $units[] = [
-                'num' => $i,
-                'completion' => $completion,
-                'status' => $status,
-                'status_color' => $status_color,
-                'notes' => $note,
-                'initials' => $initials,
+                'num'          => $unit_num,
+                'completion'   => $completion,
+                'status'       => $status,
+                'status_color' => $colors[$status] ?? '#999',
+                'notes'        => $unit_items[0]->model_number ?: '',
+                'initials'     => $unit_items[0]->serial_number ?: '',
             ];
         }
         return $units;
     }
 
-    private function group_units_detail(array $items, int $unit_count): array {
+    private function group_units_detail_new(array $items): array {
         $units = [];
-        for ($i = 1; $i <= $unit_count; $i++) {
-            $items_for_unit = $this->items_for_unit($items, $i);
-            $checks = [];
-            foreach ($this->checklist_labels as $idx => $label) {
-                $found = false;
-                foreach ($items_for_unit as $item) {
-                    if ($item->item_index == $idx) {
-                        $checks[] = (bool) $item->checked;
-                        $found = true;
-                        break;
-                    }
-                }
-                if (!$found) $checks[] = false;
-            }
-
-            $sup_temp = '';
-            $ret_temp = '';
-            $delta_t = '';
-            $filter_size = '';
-            $notes = '';
-            $initials = '';
-            foreach ($items_for_unit as $item) {
-                if (!empty($item->supply_temp)) $sup_temp = $item->supply_temp;
-                if (!empty($item->return_temp)) $ret_temp = $item->return_temp;
-                if (!empty($item->delta_t)) $delta_t = $item->delta_t;
-                if (!empty($item->filter_size)) $filter_size = $item->filter_size;
-                if (!empty($item->notes)) $notes = $item->notes;
-                if (!empty($item->initials)) $initials = $item->initials;
-            }
+        $grouped = [];
+        foreach ($items as $item) {
+            $grouped[(int) $item->unit_number][] = $item;
+        }
+        foreach ($grouped as $unit_num => $unit_items) {
+            $item = $unit_items[0];
+            $checks_map = json_decode($item->checks_json, true) ?: [];
+            $labels = array_keys($checks_map);
+            $checks = array_values($checks_map);
 
             $units[] = [
-                'num' => $i,
-                'checks' => $checks,
-                'check_labels' => $this->checklist_labels,
-                'sup_temp' => $sup_temp,
-                'ret_temp' => $ret_temp,
-                'delta_t' => $delta_t,
-                'filter_size' => $filter_size,
-                'notes' => $notes,
-                'initials' => $initials,
+                'num'          => $unit_num,
+                'checks'       => $checks,
+                'check_labels' => $labels,
+                'sup_temp'     => $item->equipment_type ?: '',
+                'ret_temp'     => $item->model_number ?: '',
+                'delta_t'      => $item->serial_number ?: '',
+                'filter_size'  => '',
+                'notes'        => $item->serial_number ? 'S/N: ' . $item->serial_number : '',
+                'initials'     => $item->model_number ?: '',
             ];
         }
         return $units;
     }
 
-    private function items_for_unit(array $items, int $unit_number): array {
-        return array_values(array_filter($items, function ($item) use ($unit_number) {
-            return (int) $item->unit_number === $unit_number;
-        }));
-    }
-
-    private function compute_status(array $items): string {
-        $checked = 0;
-        $total = 0;
-        foreach ($items as $item) {
-            $total++;
-            if ($item->checked) $checked++;
-        }
-        if ($total === 0) return 'none';
-        $pct = ($checked / $total) * 100;
-        if ($pct >= 70) return 'ok';
-        if ($pct >= 30) return 'mon';
-        return 'action';
-    }
-
-    private function status_color(int $checked, int $total): string {
-        if ($total === 0) return '#999999';
-        $pct = ($checked / $total) * 100;
-        if ($pct >= 70) return '#2ecc71';
-        if ($pct >= 30) return '#f59e0b';
-        return '#ef4444';
-    }
 }
