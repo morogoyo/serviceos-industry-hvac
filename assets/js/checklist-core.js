@@ -409,23 +409,34 @@ HVACChecklist.submitREST = function(wid, count, key, restUrl, nonce) {
   }
 
   const payload = {
-    unit_count: count,
+    ji_contract: document.getElementById(`hvac_ji_contract_${wid}`)?.value || '',
+    ji_wo: document.getElementById(`hvac_ji_wo_${wid}`)?.value || '',
+    technician_id: 0,
+    client_id: null,
     ji_property: document.getElementById(`hvac_ji_property_${wid}`)?.value || '',
     ji_date: document.getElementById(`hvac_ji_date_${wid}`)?.value || '',
     ji_tech: document.getElementById(`hvac_ji_tech_${wid}`)?.value || '',
-    ji_wo: document.getElementById(`hvac_ji_wo_${wid}`)?.value || '',
-    ji_contract: document.getElementById(`hvac_ji_contract_${wid}`)?.value || '',
     ji_visit: document.getElementById(`hvac_ji_visit_${wid}`)?.value || '',
+    unit_count: count,
     units: [],
-    signoff: [],
+    signoffs: [],
   };
 
   for (let u = 1; u <= count; u++) {
     const checks = [...document.querySelectorAll(`#hvac_unit_${wid}_${u} .hvac-check-item input[type="checkbox"]`)].map(c => c.checked);
     const active = ['ok','mon','action'].find(s => document.getElementById(`hvac_st_${wid}_${u}_${s}`)?.classList.contains('hvac-active')) || 'none';
+
+    const checksMap = {};
+    checks.forEach((checked, idx) => {
+      checksMap[HVACChecklist.ITEMS[idx]] = checked;
+    });
+
     payload.units.push({
-      num: u,
-      checks: checks,
+      unit_number: u,
+      equipment_type: 'Split System',
+      serial_number: '',
+      model_number: '',
+      checks_json: checksMap,
       status: active,
       sup: document.getElementById(`hvac_sup_${wid}_${u}`)?.value || '',
       ret: document.getElementById(`hvac_ret_${wid}_${u}`)?.value || '',
@@ -440,7 +451,11 @@ HVACChecklist.submitREST = function(wid, count, key, restUrl, nonce) {
   signoffItems.forEach(item => {
     const cb = item.querySelector('input[type="checkbox"]');
     const lbl = item.querySelector('span');
-    payload.signoff.push({
+    payload.signoffs.push({
+      signoff_type: 'technician',
+      printed_name: (lbl?.textContent?.trim() || ''),
+      signature_data: '',
+      signed_at: new Date().toISOString(),
       checked: cb?.checked || false,
       label: lbl?.textContent?.trim() || '',
     });
@@ -461,12 +476,12 @@ HVACChecklist.submitREST = function(wid, count, key, restUrl, nonce) {
       HVACChecklist.showSubmitSuccess(wid, data.message || 'Report submitted successfully.');
     } else {
       HVACChecklist.showSubmitError(wid, (data && data.message) || 'Submission failed. Please try again.');
-      if (btn) { btn.disabled = false; btn.textContent = '✉ Submit Report'; }
+      if (btn) { btn.disabled = false; btn.textContent = '\u2709 Submit Report'; }
     }
   })
   .catch(err => {
     console.error('Submit error:', err);
     HVACChecklist.showSubmitError(wid, 'Network error. Please check your connection and try again.');
-    if (btn) { btn.disabled = false; btn.textContent = '✉ Submit Report'; }
+    if (btn) { btn.disabled = false; btn.textContent = '\u2709 Submit Report'; }
   });
 };

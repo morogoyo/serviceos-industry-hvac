@@ -22,11 +22,32 @@ class Public_Checklist {
     }
 
     public static function render_checklist($atts) {
-        $atts = shortcode_atts(['units' => '10'], $atts);
+        $atts = shortcode_atts([
+            'units'                 => '10',
+            'ji_wo'                 => '',
+            'ji_contract'           => '',
+            'allow_wo_override'     => '1',
+            'enforce_assignment_lock' => '0',
+            'navy_color'            => '#001C32',
+            'orange_color'          => '#E07820',
+        ], $atts);
+
         $unit_count = absint($atts['units']);
         if (!in_array($unit_count, [10, 52])) {
             $unit_count = 10;
         }
+
+        $wo_value = sanitize_text_field($atts['ji_wo']);
+        if (empty($wo_value) && !empty($_GET['wo_id'])) {
+            $wo_value = sanitize_text_field(wp_unslash($_GET['wo_id']));
+        }
+        $contract_value = sanitize_text_field($atts['ji_contract']);
+        if (empty($contract_value) && !empty($_GET['contract_id'])) {
+            $contract_value = sanitize_text_field(wp_unslash($_GET['contract_id']));
+        }
+        $wo_readonly = $wo_value && !$atts['allow_wo_override'] ? ' readonly' : '';
+        $assignment_lock = (bool) $atts['enforce_assignment_lock'];
+        $tech_readonly = $assignment_lock ? ' readonly' : '';
 
         $wid = 'hvac' . $unit_count . '_' . uniqid();
         $storage_key = 'hvac_' . $unit_count . 'unit_v1';
@@ -37,9 +58,19 @@ class Public_Checklist {
         $rest_url = rest_url('crm/v1/hvac/checklist-submit');
         $nonce = wp_create_nonce('wp_rest');
 
+        $navy = esc_attr($atts['navy_color']);
+        $orange = esc_attr($atts['orange_color']);
+        $total_items = $unit_count * 5;
+
         ob_start();
         ?>
-<div class="hvac-wrap hvac-wrap-<?php echo $unit_count; ?>unit" id="<?php echo esc_attr($wid); ?>" data-recipient="<?php echo esc_attr($recipient_name); ?>">
+<style id="hvac-elementor-style-<?php echo esc_attr($wid); ?>">
+#<?php echo esc_attr($wid); ?> { --navy: <?php echo $navy; ?>; --orange: <?php echo $orange; ?>; }
+</style>
+<div class="hvac-wrap hvac-wrap-<?php echo $unit_count; ?>unit" id="<?php echo esc_attr($wid); ?>"
+     data-recipient="<?php echo esc_attr($recipient_name); ?>"
+     data-wo-override="<?php echo esc_attr($atts['allow_wo_override']); ?>"
+     data-assignment-lock="<?php echo $assignment_lock ? '1' : '0'; ?>">
 
   <div class="hvac-header">
     <div class="hvac-header-main">
@@ -56,18 +87,18 @@ class Public_Checklist {
       <div class="hvac-progress-track">
         <div class="hvac-progress-fill" id="hvac_pf_<?php echo esc_attr($wid); ?>"></div>
       </div>
-      <div class="hvac-progress-label" id="hvac_pl_<?php echo esc_attr($wid); ?>">0 / <?php echo $unit_count * 5; ?> items</div>
+      <div class="hvac-progress-label" id="hvac_pl_<?php echo esc_attr($wid); ?>">0 / <?php echo $total_items; ?> items</div>
     </div>
   </div>
 
   <div class="hvac-card">
-    <div class="hvac-section-label">? Job Information</div>
+    <div class="hvac-section-label">▸ Job Information</div>
     <div class="hvac-job-grid">
       <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address"></div>
       <div class="hvac-job-field"><label>Date of Service</label><input type="date" id="hvac_ji_date_<?php echo esc_attr($wid); ?>"></div>
-      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name"></div>
-      <div class="hvac-job-field"><label>Work Order #</label><input type="text" id="hvac_ji_wo_<?php echo esc_attr($wid); ?>" placeholder="&mdash;"></div>
-      <div class="hvac-job-field"><label>Contract #</label><input type="text" id="hvac_ji_contract_<?php echo esc_attr($wid); ?>" placeholder="&mdash;"></div>
+      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name"<?php echo $tech_readonly; ?>></div>
+      <div class="hvac-job-field"><label>Work Order #</label><input type="text" id="hvac_ji_wo_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($wo_value); ?>"<?php echo $wo_readonly; ?>></div>
+      <div class="hvac-job-field"><label>Contract #</label><input type="text" id="hvac_ji_contract_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($contract_value); ?>"></div>
       <div class="hvac-job-field"><label>Visit Type</label>
         <select id="hvac_ji_visit_<?php echo esc_attr($wid); ?>">
           <option value="">Select...</option>
