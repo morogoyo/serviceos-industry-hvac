@@ -40,3 +40,15 @@ add_action('plugins_loaded', function () {
         $harness->register_with_crm();
     }, 99);
 });
+
+add_action('elementor/elements/categories_registered', function ($elements_manager) {
+    $elements_manager->add_category('serviceos', [
+        'title' => __('ServiceOS', 'serviceos-industry-hvac'),
+        'icon'  => 'fa fa-wrench',
+    ]);
+});
+
+add_action('elementor/widgets/widgets_registered', function ($widgets_manager) {
+    require_once SERVICEOS_IP_PATH . 'includes/widgets/class-hvac-checklist-widget.php';
+    $widgets_manager->register(new \ServiceOS_Industry_Plugin\Widgets\HVAC_Checklist_Widget());
+});
