@@ -202,8 +202,6 @@ class Public_Checklist {
             return new \WP_Error('rest_invalid_json', 'No checklist data received.', ['status' => 400]);
         }
 
-        self::ensure_tables_exist();
-
         $submission_id = self::save_submission($params);
         if (!$submission_id) {
             return new \WP_Error('rest_save_failed', 'Failed to save submission.', ['status' => 500]);
@@ -218,76 +216,67 @@ class Public_Checklist {
         ]);
     }
 
-    private static function ensure_tables_exist() {
-        global $wpdb;
-        $tables = [
-            $wpdb->prefix . 'hvac_submissions',
-            $wpdb->prefix . 'hvac_unit_items',
-            $wpdb->prefix . 'hvac_signoffs',
-        ];
-        $all_exist = true;
-        foreach ($tables as $table) {
-            if ($wpdb->get_var("SHOW TABLES LIKE '$table'") != $table) {
-                $all_exist = false;
-                break;
-            }
-        }
-        if (!$all_exist) {
-            self::create_tables();
-        }
-    }
-
     public static function create_tables() {
         global $wpdb;
-        $charset = $wpdb->get_charset_collate();
 
-        $submissions = $wpdb->prefix . 'hvac_submissions';
-        $unit_items = $wpdb->prefix . 'hvac_unit_items';
-        $signoffs = $wpdb->prefix . 'hvac_signoffs';
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-        $wpdb->query("CREATE TABLE IF NOT EXISTS $submissions (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            uuid VARCHAR(36) NOT NULL UNIQUE,
-            property_address VARCHAR(255) NOT NULL,
-            date_of_service DATE NOT NULL,
-            technician_name VARCHAR(100) NOT NULL,
-            work_order VARCHAR(50) DEFAULT '',
-            contract_number VARCHAR(50) DEFAULT '',
-            visit_type VARCHAR(50) DEFAULT '',
-            unit_count INT NOT NULL DEFAULT 10,
-            company_name VARCHAR(100) DEFAULT '',
-            submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            raw_json LONGTEXT,
-            INDEX idx_date (date_of_service),
-            INDEX idx_tech (technician_name),
-            INDEX idx_property (property_address(100))
-        ) $charset");
+        $tables = [
+            self::submissions_table_sql(),
+            self::unit_items_table_sql(),
+            self::signoffs_table_sql(),
+        ];
 
-        $wpdb->query("CREATE TABLE IF NOT EXISTS $unit_items (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            submission_id BIGINT UNSIGNED NOT NULL,
-            unit_number INT NOT NULL,
-            item_index INT NOT NULL,
-            checked TINYINT(1) DEFAULT 0,
-            status ENUM('none','ok','mon','action') DEFAULT 'none',
-            supply_temp VARCHAR(20) DEFAULT '',
-            return_temp VARCHAR(20) DEFAULT '',
-            delta_t VARCHAR(20) DEFAULT '',
-            filter_size VARCHAR(50) DEFAULT '',
-            notes TEXT,
-            initials VARCHAR(10) DEFAULT '',
-            UNIQUE KEY uq_unit_item (submission_id, unit_number, item_index),
-            INDEX idx_submission_id (submission_id),
-            INDEX idx_unit_number (unit_number)
-        ) $charset");
+        dbDelta($tables);
+    }
 
-        $wpdb->query("CREATE TABLE IF NOT EXISTS $signoffs (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            submission_id BIGINT UNSIGNED NOT NULL,
-            item_label VARCHAR(200) NOT NULL,
-            checked TINYINT(1) DEFAULT 0,
-            INDEX idx_submission_id (submission_id)
-        ) $charset");
+    private static function submissions_table_sql() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'hvac_submissions';
+
+        return "CREATE TABLE {$table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            ji_contract VARCHAR(100) DEFAULT NULL,
+            ji_wo VARCHAR(100) DEFAULT NULL,
+            technician_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+            client_id BIGINT(20) UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) {$wpdb->get_charset_collate()}";
+    }
+
+    private static function unit_items_table_sql() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'hvac_unit_items';
+
+        return "CREATE TABLE {$table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            submission_id BIGINT(20) UNSIGNED NOT NULL,
+            unit_number INT NOT NULL DEFAULT 0,
+            equipment_type VARCHAR(100) DEFAULT '',
+            serial_number VARCHAR(100) DEFAULT '',
+            model_number VARCHAR(100) DEFAULT '',
+            checks_json LONGTEXT,
+            PRIMARY KEY (id),
+            KEY idx_submission_id (submission_id),
+            KEY idx_serial_number (serial_number)
+        ) {$wpdb->get_charset_collate()}";
+    }
+
+    private static function signoffs_table_sql() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'hvac_signoffs';
+
+        return "CREATE TABLE {$table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            submission_id BIGINT(20) UNSIGNED NOT NULL,
+            signoff_type VARCHAR(50) DEFAULT '',
+            printed_name VARCHAR(255) DEFAULT '',
+            signature_data LONGTEXT,
+            signed_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_submission_id (submission_id)
+        ) {$wpdb->get_charset_collate()}";
     }
 
     private static function save_submission($payload) {
