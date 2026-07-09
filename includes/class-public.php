@@ -207,13 +207,96 @@ class Public_Checklist {
             return new \WP_Error('rest_save_failed', 'Failed to save submission.', ['status' => 500]);
         }
 
+        $deal_id = self::register_equipment_and_create_deal($params, $submission_id);
+
         Email::send($params);
 
-        return rest_ensure_response([
-            'success' => true,
-            'message' => 'Report submitted successfully.',
+        $response = [
+            'success'       => true,
+            'message'       => 'Report submitted successfully.',
             'submission_id' => $submission_id,
-        ]);
+        ];
+        if ($deal_id) {
+            $response['deal_id'] = $deal_id;
+        }
+
+        return rest_ensure_response($response);
+    }
+
+    private static function register_equipment_and_create_deal($payload, $submission_id) {
+        global $wpdb;
+        $business_id = (int) get_option('service_os_crm_business_id', 0);
+
+        $units = $payload['units'] ?? [];
+
+        foreach ($units as $unit) {
+            $serial = sanitize_text_field($unit['serial_number'] ?? '');
+            if (empty($serial)) {
+                continue;
+            }
+
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}crm_resources
+                 WHERE business_id = %d AND title = %s AND type = 'equipment'",
+                $business_id, $serial
+            ));
+
+            if (!$existing) {
+                require_once WP_PLUGIN_DIR . '/service-os-crm/src/Models/class-resource.php';
+                require_once WP_PLUGIN_DIR . '/service-os-crm/src/Repositories/class-resource-repository.php';
+
+                $resource = new \Service_OS_CRM\Models\Resource();
+                $resource->business_id   = $business_id;
+                $resource->client_id     = !empty($payload['client_id']) ? absint($payload['client_id']) : null;
+                $resource->title         = $serial;
+                $resource->type          = 'equipment';
+                $resource->external_url  = '';
+                $resource->attachment_id = null;
+
+                $repo = new \Service_OS_CRM\Repositories\Resource_Repository();
+                $repo->create($resource);
+            }
+        }
+
+        $pipeline_name = 'Service & Repair Pipeline';
+        $pipeline = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}crm_pipelines
+             WHERE business_id = %d AND name = %s",
+            $business_id, $pipeline_name
+        ));
+
+        if (!$pipeline) {
+            return null;
+        }
+
+        $first_stage = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}crm_pipeline_stages
+             WHERE pipeline_id = %d ORDER BY stage_order ASC LIMIT 1",
+            $pipeline->id
+        ));
+
+        if (!$first_stage) {
+            return null;
+        }
+
+        require_once WP_PLUGIN_DIR . '/service-os-crm/src/Models/class-deal.php';
+        require_once WP_PLUGIN_DIR . '/service-os-crm/src/Repositories/class-deal-repository.php';
+
+        $deal = new \Service_OS_CRM\Models\Deal();
+        $deal->business_id = $business_id;
+        $deal->client_id   = !empty($payload['client_id']) ? absint($payload['client_id']) : null;
+        $deal->pipeline_id = (int) $pipeline->id;
+        $deal->stage_id    = (int) $first_stage->id;
+        $deal->title       = sanitize_text_field(
+            ($payload['ji_wo'] ?? 'Checklist') . ' — Submission #' . $submission_id
+        );
+        $deal->value       = 0;
+        $deal->status      = 'new';
+        $deal->milestone   = 0;
+        $deal->notes       = 'Generated from HVAC Field Checklist submission #' . $submission_id;
+
+        $repo = new \Service_OS_CRM\Repositories\Deal_Repository();
+        return $repo->create($deal);
     }
 
     public static function create_tables() {
@@ -282,25 +365,16 @@ class Public_Checklist {
     private static function save_submission($payload) {
         global $wpdb;
 
-        $uuid = wp_generate_uuid4();
-        $settings = get_option('hvac_settings', []);
-        $company = $settings['company'] ?? 'ServicePro';
-
         $result = $wpdb->insert(
             $wpdb->prefix . 'hvac_submissions',
             [
-                'uuid' => $uuid,
-                'property_address' => sanitize_text_field($payload['ji_property'] ?? ''),
-                'date_of_service' => sanitize_text_field($payload['ji_date'] ?? date('Y-m-d')),
-                'technician_name' => sanitize_text_field($payload['ji_tech'] ?? ''),
-                'work_order' => sanitize_text_field($payload['ji_wo'] ?? ''),
-                'contract_number' => sanitize_text_field($payload['ji_contract'] ?? ''),
-                'visit_type' => sanitize_text_field($payload['ji_visit'] ?? ''),
-                'unit_count' => intval($payload['unit_count'] ?? 10),
-                'company_name' => sanitize_text_field($company),
-                'raw_json' => json_encode($payload),
+                'ji_contract'   => sanitize_text_field($payload['ji_contract'] ?? ''),
+                'ji_wo'         => sanitize_text_field($payload['ji_wo'] ?? ''),
+                'technician_id' => absint($payload['technician_id'] ?? 0),
+                'client_id'     => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
+                'created_at'    => current_time('mysql'),
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
+            ['%s', '%s', '%d', '%d', '%s']
         );
 
         if (!$result) {
@@ -312,40 +386,35 @@ class Public_Checklist {
 
         if (!empty($payload['units'])) {
             foreach ($payload['units'] as $unit) {
-                $unit_num = intval($unit['num'] ?? 0);
-                $checks = $unit['checks'] ?? [];
-                for ($i = 0; $i < 10; $i++) {
-                    $wpdb->insert(
-                        $wpdb->prefix . 'hvac_unit_items',
-                        [
-                            'submission_id' => $submission_id,
-                            'unit_number' => $unit_num,
-                            'item_index' => $i,
-                            'checked' => !empty($checks[$i]) ? 1 : 0,
-                            'status' => sanitize_text_field($unit['status'] ?? 'none'),
-                            'supply_temp' => sanitize_text_field($unit['sup'] ?? ''),
-                            'return_temp' => sanitize_text_field($unit['ret'] ?? ''),
-                            'delta_t' => sanitize_text_field($unit['dt'] ?? ''),
-                            'filter_size' => sanitize_text_field($unit['fs'] ?? ''),
-                            'notes' => sanitize_textarea_field($unit['notes'] ?? ''),
-                            'initials' => sanitize_text_field($unit['init'] ?? ''),
-                        ],
-                        ['%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
-                    );
-                }
+                $wpdb->insert(
+                    $wpdb->prefix . 'hvac_unit_items',
+                    [
+                        'submission_id'   => $submission_id,
+                        'unit_number'     => intval($unit['unit_number'] ?? 0),
+                        'equipment_type'  => sanitize_text_field($unit['equipment_type'] ?? ''),
+                        'serial_number'   => sanitize_text_field($unit['serial_number'] ?? ''),
+                        'model_number'    => sanitize_text_field($unit['model_number'] ?? ''),
+                        'checks_json'     => is_array($unit['checks_json'] ?? null)
+                            ? json_encode($unit['checks_json'])
+                            : sanitize_textarea_field($unit['checks_json'] ?? ''),
+                    ],
+                    ['%d', '%d', '%s', '%s', '%s', '%s']
+                );
             }
         }
 
-        if (!empty($payload['signoff'])) {
-            foreach ($payload['signoff'] as $item) {
+        if (!empty($payload['signoffs'])) {
+            foreach ($payload['signoffs'] as $so) {
                 $wpdb->insert(
                     $wpdb->prefix . 'hvac_signoffs',
                     [
-                        'submission_id' => $submission_id,
-                        'item_label' => sanitize_text_field($item['label'] ?? ''),
-                        'checked' => !empty($item['checked']) ? 1 : 0,
+                        'submission_id'  => $submission_id,
+                        'signoff_type'   => sanitize_text_field($so['signoff_type'] ?? ''),
+                        'printed_name'   => sanitize_text_field($so['printed_name'] ?? ''),
+                        'signature_data' => sanitize_textarea_field($so['signature_data'] ?? ''),
+                        'signed_at'      => sanitize_text_field($so['signed_at'] ?? current_time('mysql')),
                     ],
-                    ['%d', '%s', '%d']
+                    ['%d', '%s', '%s', '%s', '%s']
                 );
             }
         }
