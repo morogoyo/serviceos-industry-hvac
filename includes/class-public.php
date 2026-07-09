@@ -237,7 +237,7 @@ class Public_Checklist {
         }
     }
 
-    private static function create_tables() {
+    public static function create_tables() {
         global $wpdb;
         $charset = $wpdb->get_charset_collate();
 
