@@ -4,6 +4,7 @@ namespace ServiceOS_Industry_Plugin;
 class Assets {
     public static function register() {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue']);
+        add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_public']);
     }
 
     public static function enqueue() {
@@ -34,6 +35,18 @@ class Assets {
             'businessId' => (int) get_option('service_os_crm_business_id', 1),
             'moduleSlug' => 'hvac',
             'modulePage' => admin_url('admin.php?page=service-os-crm-module-hvac'),
+        ]);
+    }
+
+    public static function enqueue_public() {
+        if (!wp_script_is('hvac-checklist-core', 'enqueued')) {
+            return;
+        }
+
+        wp_localize_script('hvac-checklist-core', 'HVACChecklistConfig', [
+            'restUrl'    => rest_url('crm/v1/hvac/checklist-submit'),
+            'restNonce'  => wp_create_nonce('wp_rest'),
+            'businessId' => (int) get_option('service_os_crm_business_id', 0),
         ]);
     }
 }

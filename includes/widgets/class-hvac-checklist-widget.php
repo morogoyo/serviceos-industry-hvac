@@ -46,6 +46,40 @@ class HVAC_Checklist_Widget extends Widget_Base {
             ],
         ]);
 
+        $this->add_control('ji_wo', [
+            'label'       => __('Work Order #', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::TEXT,
+            'default'     => '',
+            'placeholder' => __('Optional — auto-fills WO field', 'serviceos-industry-hvac'),
+        ]);
+
+        $this->add_control('ji_contract', [
+            'label'       => __('Contract #', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::TEXT,
+            'default'     => '',
+            'placeholder' => __('Optional — auto-fills Contract field', 'serviceos-industry-hvac'),
+        ]);
+
+        $this->add_control('allow_wo_override', [
+            'label'        => __('Allow Work Order Override', 'serviceos-industry-hvac'),
+            'description'  => __('When off, the WO field is locked if pre-populated via URL or shortcode.', 'serviceos-industry-hvac'),
+            'type'         => Controls_Manager::SWITCHER,
+            'label_on'     => __('Yes', 'serviceos-industry-hvac'),
+            'label_off'    => __('No', 'serviceos-industry-hvac'),
+            'return_value' => '1',
+            'default'      => '1',
+        ]);
+
+        $this->add_control('enforce_assignment_lock', [
+            'label'        => __('Enforce Assignment Lock', 'serviceos-industry-hvac'),
+            'description'  => __('When on, the technician name field becomes read-only.', 'serviceos-industry-hvac'),
+            'type'         => Controls_Manager::SWITCHER,
+            'label_on'     => __('On', 'serviceos-industry-hvac'),
+            'label_off'    => __('Off', 'serviceos-industry-hvac'),
+            'return_value' => '1',
+            'default'      => '',
+        ]);
+
         $this->end_controls_section();
 
         $this->start_controls_section('style_section', [
@@ -70,139 +104,33 @@ class HVAC_Checklist_Widget extends Widget_Base {
 
     protected function render() {
         $settings = $this->get_settings_for_display();
+
         $unit_count = $settings['unit_count'] ?? '10';
         if (!in_array($unit_count, ['10', '52'])) {
             $unit_count = '10';
         }
-        $unit_count_int = (int) $unit_count;
+
+        $atts = [
+            'units'                     => $unit_count,
+            'ji_wo'                     => $settings['ji_wo'] ?? '',
+            'ji_contract'               => $settings['ji_contract'] ?? '',
+            'allow_wo_override'         => $settings['allow_wo_override'] ?? '1',
+            'enforce_assignment_lock'   => $settings['enforce_assignment_lock'] ?? '',
+            'navy_color'                => $settings['navy_color'] ?? '#001C32',
+            'orange_color'              => $settings['orange_color'] ?? '#E07820',
+        ];
+
+        $shortcode_str = '[hvac_checklist';
+        foreach ($atts as $key => $value) {
+            if (!empty($value) || $value === '0') {
+                $shortcode_str .= ' ' . $key . '="' . esc_attr($value) . '"';
+            }
+        }
+        $shortcode_str .= ']';
 
         $this->enqueue_checklist_assets();
 
-        $wid = 'hvac' . $unit_count . '_' . uniqid();
-        $storage_key = 'hvac_' . $unit_count . 'unit_v1';
-
-        $hvac_settings = get_option('hvac_settings', []);
-        $company = $hvac_settings['company'] ?? 'ServicePro Field';
-        $recipient_name = $hvac_settings['recipient_name'] ?? 'the administrator';
-        $rest_url = rest_url('crm/v1/hvac/checklist-submit');
-        $nonce = wp_create_nonce('wp_rest');
-
-        $navy = esc_attr($settings['navy_color'] ?? '#001C32');
-        $orange = esc_attr($settings['orange_color'] ?? '#E07820');
-
-        $total_items = $unit_count_int * 5;
-        ?>
-<style id="hvac-elementor-style-<?php echo esc_attr($wid); ?>">
-#<?php echo esc_attr($wid); ?> { --navy: <?php echo $navy; ?>; --orange: <?php echo $orange; ?>; }
-</style>
-<div class="hvac-wrap hvac-wrap-<?php echo $unit_count; ?>unit" id="<?php echo esc_attr($wid); ?>" data-recipient="<?php echo esc_attr($recipient_name); ?>">
-
-  <div class="hvac-header">
-    <div class="hvac-header-main">
-      <div class="hvac-brand">
-        <h2><?php echo esc_html($company); ?></h2>
-        <p>Technician Service Checklist — <?php echo $unit_count_int; ?> Unit Split System</p>
-      </div>
-      <div class="hvac-contact">
-        <span class="hvac-phone"><?php echo esc_html($hvac_settings['phone'] ?? '(786) 322-0638'); ?></span>
-        <span class="hvac-site"><?php echo esc_html($hvac_settings['website'] ?? 'servicepro.tools'); ?></span>
-      </div>
-    </div>
-    <div class="hvac-progress">
-      <div class="hvac-progress-track">
-        <div class="hvac-progress-fill" id="hvac_pf_<?php echo esc_attr($wid); ?>"></div>
-      </div>
-      <div class="hvac-progress-label" id="hvac_pl_<?php echo esc_attr($wid); ?>">0 / <?php echo $total_items; ?> items</div>
-    </div>
-  </div>
-
-  <div class="hvac-card">
-    <div class="hvac-section-label">▸ Job Information</div>
-    <div class="hvac-job-grid">
-      <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address"></div>
-      <div class="hvac-job-field"><label>Date of Service</label><input type="date" id="hvac_ji_date_<?php echo esc_attr($wid); ?>"></div>
-      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name"></div>
-      <div class="hvac-job-field"><label>Work Order #</label><input type="text" id="hvac_ji_wo_<?php echo esc_attr($wid); ?>" placeholder="&mdash;"></div>
-      <div class="hvac-job-field"><label>Contract #</label><input type="text" id="hvac_ji_contract_<?php echo esc_attr($wid); ?>" placeholder="&mdash;"></div>
-      <div class="hvac-job-field"><label>Visit Type</label>
-        <select id="hvac_ji_visit_<?php echo esc_attr($wid); ?>">
-          <option value="">Select...</option>
-          <option>Quarterly</option>
-          <option>Semi-Annual</option>
-          <option>Annual</option>
-          <option>Follow-Up</option>
-          <option>Emergency</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <div class="hvac-card">
-    <button class="hvac-scope-toggle" onclick="HVACChecklist.toggleScope(this)">
-      ▸ Scope of Service — Each Visit Includes
-      <span class="hvac-arrow">▾</span>
-    </button>
-    <div class="hvac-scope-body">
-      <div class="hvac-scope-grid">
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Light inspect &amp; surface-level clean of evaporator coil*</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Check refrigerant levels and system condition</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Flush and treat condensate drain lines</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Inspect for visible leaks or abnormal condensation</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Inspect control systems and safety devices</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Evaluate overall system performance</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Check contactors and electrical components for wear</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Replace all air filters (included)</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Inspect condenser fan blades and motors</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span>Provide service report after each visit</span></div>
-      </div>
-      <div class="hvac-coil-note">* Evaporator coil scope: Surface-level cleaning of accessible coil only. This is NOT a deep clean. Deep cleaning requires additional labor and is billed separately.</div>
-    </div>
-  </div>
-
-  <div class="hvac-units-label">▸ Unit-by-Unit Service Checklist</div>
-  <div class="hvac-units-container"></div>
-
-  <div class="hvac-card">
-    <div class="hvac-section-label">▸ Final Sign-Off</div>
-    <div class="hvac-signoff-grid">
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>All <?php echo $unit_count_int; ?> units serviced and checklist complete</span></label>
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>All filters replaced</span></label>
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>Service report prepared</span></label>
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>No units require follow-up</span></label>
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>Follow-up required &mdash; see notes</span></label>
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>Quote to follow for additional work</span></label>
-    </div>
-    <div class="hvac-sig-row">
-      <div class="hvac-sig-block">
-        <label>Technician Signature</label>
-        <input class="hvac-sig-line" type="text" placeholder="Sign here">
-        <div class="hvac-sig-date">Date: <input type="date"></div>
-      </div>
-      <div class="hvac-sig-block">
-        <label>Client / Authorized Rep Signature</label>
-        <input class="hvac-sig-line" type="text" placeholder="Sign here">
-        <div class="hvac-sig-date">Date: <input type="date"></div>
-      </div>
-    </div>
-    <div class="hvac-disclaimer">Technician signature confirms all items above were inspected and serviced. Client/rep signature confirms work completed to satisfaction.</div>
-  </div>
-
-  <div id="hvac_submit_banner_<?php echo esc_attr($wid); ?>"
-       style="display:none;margin:0 0 10px;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.5;font-family:Arial,sans-serif;">
-  </div>
-
-  <div class="hvac-action-bar">
-    <button class="hvac-btn hvac-btn-secondary" onclick="HVACChecklist.clearAll('<?php echo esc_js($storage_key); ?>')">Clear All</button>
-    <button class="hvac-btn hvac-btn-secondary" onclick="window.print()">? Print</button>
-    <button class="hvac-btn hvac-btn-submit" id="hvac_submit_btn_<?php echo esc_attr($wid); ?>"
-      onclick="HVACChecklist.submitREST('<?php echo esc_js($wid); ?>',<?php echo $unit_count_int; ?>,'<?php echo esc_js($storage_key); ?>','<?php echo esc_js($rest_url); ?>','<?php echo esc_js($nonce); ?>')">
-      ? Submit Report
-    </button>
-    <button class="hvac-btn hvac-btn-primary" onclick="HVACChecklist.expandAll('<?php echo esc_attr($wid); ?>',<?php echo $unit_count_int; ?>)">Expand All</button>
-  </div>
-
-</div>
-        <?php
+        echo do_shortcode($shortcode_str);
     }
 
     protected function content_template() {
