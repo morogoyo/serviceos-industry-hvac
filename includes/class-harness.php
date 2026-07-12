@@ -252,34 +252,59 @@ class Harness extends Service_OS_CRM_Harness {
             "SELECT COUNT(DISTINCT technician_id) FROM {$table} WHERE technician_id > 0"
         );
 
-        $rows = [];
-        $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
-        foreach ($submissions as $s) {
-            $view_link = '<a href="' . esc_url(add_query_arg('id', $s->id, $list_url)) . '">View</a>';
-            $rows[] = [
-                '#' . $s->id,
-                esc_html($s->ji_contract ?: '—'),
-                esc_html($s->ji_wo ?: '—'),
-                esc_html($s->technician_name ?: 'User #' . $s->technician_id),
-                esc_html($s->created_at),
-                $view_link,
-            ];
-        }
-
         $data = $this->get_standard_schema();
         $data['type'] = 'list';
         $data['title'] = 'Field Checklists';
         $data['subtitle'] = 'Technician field checklist submissions';
         $data['hero_stat'] = ['label' => 'Total Submissions', 'value' => (string) $total];
         $data['tags'] = [(string) $unique_techs . ' Technicians', (string) $recent . ' Last 30 Days'];
-        $data['sections'] = [
-            [
-                'type' => 'data_table',
-                'label' => 'Submissions',
-                'cols' => ['ID', 'Contract', 'Work Order', 'Technician', 'Submitted', 'Actions'],
-                'rows' => $rows,
-            ],
-        ];
+
+        $detail_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
+
+        $table_html = '<div class="crm-card crm-section-card">';
+        $table_html .= '<h3 class="crm-section-label">Submissions</h3>';
+
+        if (empty($submissions)) {
+            $table_html .= '<p style="padding:20px;text-align:center;color:var(--on-surface);opacity:0.6;">No submissions yet.</p>';
+        } else {
+            $table_html .= '<div style="overflow-x:auto;">';
+            $table_html .= '<table class="crm-table">';
+            $table_html .= '<thead><tr><th>ID</th><th>Contract</th><th>Work Order</th><th>Technician</th><th>Submitted</th><th>Actions</th></tr></thead>';
+            $table_html .= '<tbody>';
+            foreach ($submissions as $s) {
+                $view_url = esc_url(add_query_arg('id', $s->id, $detail_url));
+                $tech_name = esc_html($s->technician_name ?: 'User #' . $s->technician_id);
+                $table_html .= '<tr>';
+                $table_html .= '<td><a href="' . $view_url . '">#' . (int) $s->id . '</a></td>';
+                $table_html .= '<td>' . esc_html($s->ji_contract ?: '—') . '</td>';
+                $table_html .= '<td>' . esc_html($s->ji_wo ?: '—') . '</td>';
+                $table_html .= '<td>' . $tech_name . '</td>';
+                $table_html .= '<td>' . esc_html($s->created_at) . '</td>';
+                $table_html .= '<td><a href="' . $view_url . '">View</a></td>';
+                $table_html .= '</tr>';
+            }
+            $table_html .= '</tbody></table></div>';
+        }
+        $table_html .= '</div>';
+
+        $data['sections'][] = ['type' => 'html', 'content' => $table_html];
+
+        $total_pages = (int) ceil($total / $per_page);
+        if ($total_pages > 1) {
+            $base_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions');
+            $pages_html = '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">';
+            for ($i = 1; $i <= $total_pages; $i++) {
+                $class = ($i === $page) ? 'crm-btn-primary' : 'crm-btn-back';
+                $pages_html .= sprintf(
+                    '<a href="%s" class="%s" style="min-width:36px;text-align:center;">%d</a>',
+                    esc_url(add_query_arg('page_num', $i, $base_url)),
+                    $class,
+                    $i
+                );
+            }
+            $pages_html .= '</div>';
+            $data['sections'][] = ['type' => 'html', 'content' => $pages_html];
+        }
 
         return $data;
     }
