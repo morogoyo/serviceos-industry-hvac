@@ -413,7 +413,7 @@ HVACChecklist.submitREST = function(wid, count, key, restUrl, nonce) {
     ji_wo: document.getElementById(`hvac_ji_wo_${wid}`)?.value || '',
     technician_id: 0,
     client_id: null,
-    auto_track: wrapper.dataset.autoTrack || '1',
+    auto_track: recipientEl.dataset.autoTrack || '1',
     ji_property: document.getElementById(`hvac_ji_property_${wid}`)?.value || '',
     ji_date: document.getElementById(`hvac_ji_date_${wid}`)?.value || '',
     ji_tech: document.getElementById(`hvac_ji_tech_${wid}`)?.value || '',
