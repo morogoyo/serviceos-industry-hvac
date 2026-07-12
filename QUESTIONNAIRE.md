@@ -1,95 +1,188 @@
 # Industry Plugin — Client Questionnaire
 
-Use this questionnaire to gather what the client needs before customizing this skeleton plugin for their industry.
+_Answers for the HVAC industry module — implemented._
 
 ---
 
 ## 1. Industry Basics
 
-- **Industry name:** _(e.g., "Plumbing")_
-- **Industry slug:** _(e.g., "plumbing" — lowercase, no spaces)_
-- **Primary icon:** _(Material Symbols name, e.g., "plumbing")_
-- **Brief description:** _(one sentence about what this module does)_
+- **Industry name:** HVAC
+- **Industry slug:** hvac
+- **Primary icon:** ac_unit
+- **Brief description:** HVAC field service management with checklists, service reports, pipeline tracking, and an Elementor-integrated field checklist shortcode for public-facing technician submissions.
 
 ---
 
 ## 2. Service Categories
 
-List the categories of services for this industry. Each category gets its own tab/filter in the CRM.
-
-| # | Category Name | Singular Label (e.g., "Repair Job") | Icon (Material Symbols) | Color (hex) |
-|---|---------------|--------------------------------------|--------------------------|-------------|
-| 1 | General       | Service                              | folder                   | #0073aa     |
-| 2 |               |                                      |                          |             |
-| 3 |               |                                      |                          |             |
-| 4 |               |                                      |                          |             |
-| 5 |               |                                      |                          |             |
+| # | Category Name            | Singular Label    | Icon         | Color    |
+|---|--------------------------|-------------------|--------------|----------|
+| 1 | AC & Cooling             | AC Job            | ac_unit      | #1565c0  |
+| 2 | Heating                  | Heating Job       | whatshot     | #d84315  |
+| 3 | Repair & Diagnostics     | Repair            | handyman     | #e65100  |
+| 4 | Air Quality              | IAQ Job           | air          | #2e7d32  |
+| 5 | Ductwork                 | Duct Job          | layers       | #795548  |
+| 6 | Thermostats & Controls   | Controls Job      | sensors      | #00695c  |
+| 7 | Maintenance Plans        | Maintenance       | event_repeat | #283593  |
+| 8 | Commercial HVAC          | Commercial Job    | business     | #37474f  |
+| 9 | New Construction         | New Build         | construction | #bf360c  |
+|10 | General                  | General           | folder       | #0073aa  |
 
 ---
 
 ## 3. Pipeline Stages
 
-Ordered list of deal stages. Deals move through these stages left-to-right.
+### Pipeline 1: HVAC Sales Pipeline
 
-| Order | Stage Name |
-|-------|-----------|
-| 0     | Lead      |
-| 1     | Qualified |
-| 2     | Proposal  |
-| 3     | Won       |
-| 4     | Lost      |
+| Order | Stage Name       |
+|-------|------------------|
+| 0     | Lead             |
+| 1     | Qualified        |
+| 2     | Site Survey      |
+| 3     | Quote Sent       |
+| 4     | Negotiation      |
+| 5     | Contract Signed  |
+| 6     | Permitting       |
+| 7     | Equipment Ordered|
+| 8     | Installation     |
+| 9     | Inspection       |
+|10     | Final Walkthrough|
+|11     | Completed        |
+
+### Pipeline 2: Service & Repair Pipeline
+
+| Order | Stage Name    |
+|-------|---------------|
+| 0     | Scheduled     |
+| 1     | Dispatched    |
+| 2     | Diagnosed     |
+| 3     | Repair Complete|
+| 4     | Invoiced      |
+| 5     | Paid          |
 
 ---
 
 ## 4. Deal Milestones (optional)
 
-Percentage milestones with custom labels. Defaults: 25% = "Kickoff", 50% = "Midpoint", 75% = "Final Review", 100% = "Complete".
-
-| %  | Label |
-|----|-------|
-| 25 |       |
-| 50 |       |
-| 75 |       |
-| 100|       |
+Uses CRM defaults: 25% = "Kickoff", 50% = "Midpoint", 75% = "Final Review", 100% = "Complete".
 
 ---
 
 ## 5. Seed Services
 
-Example services that get created when the plugin is first activated.
+### AC & Cooling (pipeline: HVAC Sales Pipeline, stage: Quote Sent unless noted)
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Central AC Install (3-ton)       | 6,500     |
+| Central AC Install (5-ton)       | 9,000     |
+| Heat Pump Install                | 8,500     |
+| Mini-Split Single Zone           | 4,000     |
+| Mini-Split Multi-Zone            | 10,000    |
+| Condenser Replacement            | 3,500     |
+| Evaporator Coil Replacement      | 2,200     |
 
-| Category | Service Title | Default Value ($) |
-|----------|--------------|-------------------|
-|          |              |                   |
-|          |              |                   |
-|          |              |                   |
+### Heating
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Gas Furnace Install (80% AFUE)   | 4,000     |
+| Gas Furnace Install (95%+ AFUE)  | 6,500     |
+| Electric Furnace Install         | 3,000     |
+| Boiler Install                   | 8,000     |
+| Heat Exchanger Replacement       | 2,500     |
+
+### Repair & Diagnostics
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Diagnostic Service Call          | 99        |
+| Capacitor Replacement            | 300       |
+| Blower Motor Replacement         | 1,000     |
+| Compressor Replacement           | 2,500     |
+| Refrigerant Leak Repair          | 800       |
+| Emergency After-Hours Service    | 249       |
+
+### Air Quality
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Whole-Home Air Purifier          | 1,500     |
+| Humidifier Install               | 800       |
+| ERV/HRV Install                  | 3,000     |
+| Dehumidifier Install             | 1,800     |
+
+### Ductwork
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Duct Replacement (Full Home)     | 5,500     |
+| Duct Cleaning                    | 800       |
+| Duct Sealing                     | 1,200     |
+| Duct Insulation                  | 2,000     |
+
+### Thermostats & Controls
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Smart Thermostat Install         | 500       |
+| Zoning System Install            | 3,500     |
+| Wi-Fi Thermostat Install         | 350       |
+
+### Maintenance Plans
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| AC Tune-Up                       | 159       |
+| Furnace Tune-Up                  | 159       |
+| Annual Plan (1 Visit)            | 299       |
+| Annual Plan (2 Visits)           | 449       |
+
+### Commercial HVAC
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| Rooftop Unit Install (5-ton)     | 25,000    |
+| VRF System Install               | 40,000    |
+| Rooftop Unit Repair              | 3,500     |
+
+### New Construction
+| Service Title                    | Value ($) |
+|----------------------------------|-----------|
+| New Build HVAC Rough-In          | 8,000     |
+| New Build Full HVAC System       | 12,000    |
+
+Total: 36 seed services across 9 categories.
 
 ---
 
 ## 6. Custom Requirements
 
-- **Need custom database tables?** [ ] Yes [ ] No
-  - If yes, describe the data you need to store and its structure:
-  - Each table needs: name, columns (name + type), and an upgrade method
+- **Need custom database tables?** [x] Yes [ ] No
+  - **hvac_submissions** — stores checklist submission metadata
+    - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
+    - uuid (VARCHAR 36 UNIQUE)
+    - property_address, date_of_service, technician_name, work_order, contract_number, visit_type, unit_count, company_name, submitted_at, raw_json
+    - Indexes: date_of_service, technician_name, property_address
+  - **hvac_unit_items** — per-unit checklist item rows
+    - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
+    - submission_id, unit_number, item_index, checked, status, supply_temp, return_temp, delta_t, filter_size, notes, initials
+    - Unique key: (submission_id, unit_number, item_index)
+    - Indexes: submission_id, unit_number
+  - **hvac_signoffs** — final sign-off checklist items
+    - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
+    - submission_id, item_label, checked
+    - Index: submission_id
 
-- **Need custom REST API endpoints?** [ ] Yes [ ] No
-  - If yes, describe the endpoints:
-  - Each endpoint needs: method (GET/POST/PUT/DELETE), route, what data it returns/accepts
+- **Need custom REST API endpoints?** [x] Yes [ ] No
+  - `POST /wp-json/crm/v1/hvac/checklist-submit` — accepts JSON checklist payload, saves to DB, sends email notification. Returns `{success, message, submission_id}`. Public (no auth required, nonce-verified).
 
-- **Need custom page sections beyond the standard schema?** [ ] Yes [ ] No
-  - Standard sections are: info_table, unit_overview, expandable_units, signoffs, data_table, form_calculator
-  - If yes, describe the custom sections needed:
+- **Need custom page sections beyond the standard schema?** [ ] Yes [x] No
+  - Uses standard sections: info_table, unit_overview, expandable_units, signoffs, data_table, html.
 
 ---
 
 ## 7. Standalone Plugin Redirect (optional)
 
-If this plugin has standalone WordPress admin pages that should redirect to the CRM:
-
-- **Standalone page slug:** _(e.g., "plumbing-submissions")_
+- **Standalone page slug:** N/A (checklist is rendered via `[hvac_checklist]` shortcode / Elementor widget on public-facing pages)
 
 ---
 
 ## 8. Additional Notes
 
-Anything else the developer should know:
+- Checklist supports two unit counts: 10-unit and 52-unit split systems, selected via shortcode attribute `units="10"` or `units="52"`.
+- An Elementor widget (`HVAC_Checklist_Widget`) wraps the shortcode for drag-and-drop page builder use.
+- Email notifications on checklist submission are sent via `wp_mail` to a configurable recipient (stored in `hvac_settings` option).
+- The 10-point checklist items are: Air Filter Replaced, Thermostat Checked, Condenser Coil Cleaned, Evaporator Coil Checked, Blower Operation Verified, Refrigerant Level Checked, Electrical Connections Checked, Drain Line Inspected, Safety Controls Tested, System Performance Verified.

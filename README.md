@@ -1,71 +1,127 @@
-# ServiceOS Industry Plugin
+# ServiceOS HVAC
 
-A skeleton WordPress plugin for creating industry-specific modules that integrate with the [ServiceOS CRM](https://github.com/morogoyo/wp_crm_general).
+HVAC-specific module for [ServiceOS CRM](https://github.com/morogoyo/wp_crm_general) — service categories, pipeline stages, field checklists, and an Elementor-integrated public-facing checklist.
 
-## Quick Start
+## Features
 
-1. **Clone this repo** into your WordPress `wp-content/plugins/` directory:
-   ```bash
-   git clone https://github.com/morogoyo/serviceos-industry-plugin.git my-industry-plugin
-   ```
-
-2. **Rename the directory** to match your industry:
-   ```bash
-   mv serviceos-industry-plugin my-industry-plugin
-   ```
-
-3. **Customize the plugin** by filling in the blanks:
-   - `serviceos-industry-plugin.php` — update the Plugin Name header
-   - `includes/class-harness.php` — set `$module_slug`, `$module_name`, `$module_icon`, `$industry`
-   - `includes/class-seeder.php` — define your industry's categories, pipeline stages, and seed services
-   - `assets/css/module.css` — add industry-specific styles
-   - `assets/js/module.js` — add industry-specific JavaScript (CRUD, forms, etc.)
-
-4. **Answer the questionnaire** in `QUESTIONNAIRE.md` to gather client requirements.
-
-5. **Activate** the plugin from the WordPress admin panel.
-
-6. **Visit the CRM** — your module's pages will appear in the sidebar.
+- **10 service categories**: AC & Cooling, Heating, Repair & Diagnostics, Air Quality, Ductwork, Thermostats & Controls, Maintenance Plans, Commercial HVAC, New Construction, General
+- **2 pipelines**: 12-stage "HVAC Sales Pipeline" + 6-stage "Service & Repair Pipeline"
+- **36 seed services** across all categories with realistic pricing
+- **Dashboard & detail pages** for the service catalog (CRM admin)
+- **Field checklist system**: public-facing `[hvac_checklist]` shortcode with 10-point technician checklist, supports 10-unit and 52-unit split systems
+- **Elementor widget**: `HVAC_Checklist_Widget` wraps the shortcode for drag-and-drop page builder use
+- **REST API**: `POST /wp-json/crm/v1/hvac/checklist-submit` accepts checklist JSON, persists to DB, sends email
+- **Email notifications**: HTML email reports sent on checklist submission
+- **CRM integration**: sidebar navigation, page rendering, CSS/JS inheritance, API access
 
 ## Requirements
 
 - WordPress 6.0+
 - [ServiceOS CRM](https://github.com/morogoyo/wp_crm_general) plugin installed and active
+- PHP 7.0+
 
 ## File Structure
 
 ```
-├── serviceos-industry-plugin.php    # Main plugin file
+├── serviceos-industry-hvac.php        # Main plugin file
 ├── includes/
-│   ├── class-harness.php            # CRM harness (pages, data schema)
-│   ├── class-activator.php          # Activation/deactivation hooks
-│   ├── class-seeder.php             # Default data seeding (categories, pipeline, services)
-│   └── class-assets.php             # Custom CSS/JS enqueuing
+│   ├── class-harness.php              # CRM harness (4 pages: dashboard, detail, submissions, submission-detail)
+│   ├── class-activator.php            # Activation/deactivation hooks + table creation
+│   ├── class-seeder.php               # Seeds 10 categories, 2 pipelines, 36 services
+│   ├── class-assets.php               # Admin CSS/JS enqueuing + localized config
+│   ├── class-email.php                # Checklist submission email notifications
+│   ├── class-public.php               # Shortcode [hvac_checklist], REST route, DB schema, save logic
+│   └── widgets/
+│       └── class-hvac-checklist-widget.php  # Elementor widget wrapper
+├── templates/
+│   ├── checklist-10.php               # 10-unit checklist HTML template (legacy)
+│   └── email-report.php               # HTML email template for checklist reports
 ├── assets/
-│   ├── css/module.css               # Industry-specific styles (uses CRM CSS variables)
-│   └── js/module.js                 # Industry-specific JS (uses ServiceOSAPI)
-├── QUESTIONNAIRE.md                 # Client questionnaire for industry requirements
-└── README.md                        # This file
+│   ├── css/
+│   │   ├── module.css                 # CRM admin styles (CRM CSS variables)
+│   │   └── checklist.css              # Front-end checklist styles (683 lines)
+│   └── js/
+│       ├── module.js                  # CRM admin JS (new service modal, API calls)
+│       ├── checklist-core.js          # Shared checklist logic (472 lines)
+│       ├── checklist-10.js            # 10-unit checklist initializer
+│       └── checklist-52.js            # 52-unit checklist initializer
+├── QUESTIONNAIRE.md                   # Client requirements (filled in)
+├── AGENTS.md                          # Agent guidelines
+└── README.md                          # This file
 ```
 
-## How It Works
+## Custom Database Tables
 
-This plugin extends `Service_OS_CRM_Harness` to provide:
+| Table | Purpose |
+|-------|---------|
+| `{prefix}hvac_submissions` | Checklist submission headers (property, tech, date, etc.) |
+| `{prefix}hvac_unit_items` | Per-unit checklist items (checked status, temps, notes, initials) |
+| `{prefix}hvac_signoffs` | Final sign-off items per submission |
 
-1. **Sidebar navigation** — your module's pages appear in the CRM sidebar
-2. **Page rendering** — pages are rendered using the CRM's standard page data schema (info tables, unit overviews, data tables, etc.)
-3. **CSS inheritance** — all CRM styles (dashboard, cards, tables, modals) are automatically loaded
-4. **API access** — `ServiceOSAPI` is available for all CRUD operations on clients, deals, services, tasks, etc.
+Created automatically on plugin activation and verified on each REST submission.
 
-## Customization Points
+## Shortcode
 
-| What to change | Where |
-|---------------|-------|
-| Module name, slug, icon, industry | `includes/class-harness.php` → properties |
-| Page titles and list | `includes/class-harness.php` → `get_pages()` |
-| Page data (tables, cards, forms) | `includes/class-harness.php` → `get_list_data()` / `get_detail_data()` |
-| Default categories | `includes/class-seeder.php` → `seed()` |
-| Default pipeline stages | `includes/class-seeder.php` → `seed()` |
-| Custom styles | `assets/css/module.css` |
-| Custom JavaScript | `assets/js/module.js` |
-| Plugin name and description | `serviceos-industry-plugin.php` → header comment |
+```
+[hvac_checklist units="10"]   # 10-unit split system (default)
+[hvac_checklist units="52"]   # 52-unit split system
+```
+
+## REST API
+
+```
+POST /wp-json/crm/v1/hvac/checklist-submit
+Content-Type: application/json
+X-WP-Nonce: {wp_rest_nonce}
+
+{
+  "ji_property": "...",
+  "ji_date": "2026-01-01",
+  "ji_tech": "...",
+  "ji_wo": "...",
+  "ji_contract": "...",
+  "ji_visit": "Quarterly",
+  "unit_count": 10,
+  "units": [
+    {
+      "num": 1,
+      "checks": [true, true, true, true, true, false, false, false, false, false],
+      "sup": "55",
+      "ret": "70",
+      "dt": "15",
+      "fs": "20x20x1",
+      "notes": "...",
+      "init": "RT"
+    }
+  ],
+  "signoff": [
+    {"label": "All units serviced...", "checked": true}
+  ]
+}
+```
+
+Response: `{"success":true, "message":"Report submitted successfully.", "submission_id":1}`
+
+## Seeding Flow
+
+```
+Plugin activates
+    → Creates hvac_* tables via Activator
+    → CRM syncs module via serviceos_crm_available_modules filter
+    → CRM fires serviceos_crm_module_seed filter
+    → Seeder::seed() returns 10 categories, 2 pipelines, 36 services
+    → CRM creates them in DB
+    → CRM sets seed_applied = 1
+```
+
+## CSS Variables Available
+
+All CRM CSS custom properties are available in `module.css` (admin pages) and custom properties are defined in `checklist.css` (front-end).
+
+## Branching
+
+- `main` — production-ready
+- `dev` — integration/staging
+- `feature/*` / `fix/*` — work branches
+
+See `AGENTS.md` for full workflow and agent guidelines.
