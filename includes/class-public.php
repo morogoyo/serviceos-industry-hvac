@@ -23,14 +23,22 @@ class Public_Checklist {
 
     public static function render_checklist($atts) {
         $atts = shortcode_atts([
-            'units'                 => '10',
-            'ji_wo'                 => '',
-            'ji_contract'           => '',
-            'allow_wo_override'     => '1',
+            'units'                   => '10',
+            'ji_wo'                   => '',
+            'ji_contract'             => '',
+            'allow_wo_override'       => '1',
             'enforce_assignment_lock' => '0',
-            'navy_color'            => '#001C32',
-            'orange_color'          => '#E07820',
+            'auto_track'              => '1',
+            'technician_lock'         => '0',
+            'navy_color'              => '#001C32',
+            'orange_color'            => '#E07820',
         ], $atts);
+
+        if ('1' === $atts['technician_lock'] && !current_user_can('edit_posts')) {
+            return '<div class="hvac-error" style="padding:20px;background:var(--card-bg,#fff);border:1px solid var(--error,#ba1a1a);border-radius:8px;color:var(--error,#ba1a1a);font-family:Arial,sans-serif;">'
+                . __('Access Restricted: You are not assigned to this operational ticket.', 'serviceos-industry-hvac')
+                . '</div>';
+        }
 
         $unit_count = absint($atts['units']);
         if (!in_array($unit_count, [10, 52])) {
@@ -70,7 +78,9 @@ class Public_Checklist {
 <div class="hvac-wrap hvac-wrap-<?php echo $unit_count; ?>unit" id="<?php echo esc_attr($wid); ?>"
      data-recipient="<?php echo esc_attr($recipient_name); ?>"
      data-wo-override="<?php echo esc_attr($atts['allow_wo_override']); ?>"
-     data-assignment-lock="<?php echo $assignment_lock ? '1' : '0'; ?>">
+     data-assignment-lock="<?php echo $assignment_lock ? '1' : '0'; ?>"
+     data-auto-track="<?php echo esc_attr($atts['auto_track']); ?>"
+     data-technician-lock="<?php echo esc_attr($atts['technician_lock']); ?>">
 
   <div class="hvac-header">
     <div class="hvac-header-main">

@@ -31,6 +31,75 @@ class HVAC_Checklist_Widget extends Widget_Base {
     }
 
     protected function register_controls() {
+        $this->start_controls_section('section_context', [
+            'label' => __('Work Order Context', 'serviceos-industry-hvac'),
+            'tab'   => Controls_Manager::TAB_CONTENT,
+        ]);
+
+        $this->add_control('operational_mode', [
+            'label'   => __('Inspection Mode', 'serviceos-industry-hvac'),
+            'type'    => Controls_Manager::SELECT,
+            'default' => 'dynamic_url',
+            'options' => [
+                'dynamic_url' => __('Dynamic (Detect from URL parameters like ?wo_id=)', 'serviceos-industry-hvac'),
+                'standalone'  => __('Standalone New Ticket', 'serviceos-industry-hvac'),
+                'fixed_wo'    => __('Bind to Explicit Work Order ID', 'serviceos-industry-hvac'),
+            ],
+        ]);
+
+        $this->add_control('fixed_work_order_id', [
+            'label'       => __('Target Work Order / Ticket ID', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::TEXT,
+            'input_type'  => 'number',
+            'placeholder' => 'e.g. 1024',
+            'condition'   => [
+                'operational_mode' => 'fixed_wo',
+            ],
+        ]);
+
+        $this->add_control('ji_contract', [
+            'label'       => __('Contract #', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::TEXT,
+            'default'     => '',
+            'placeholder' => __('Optional — auto-fills Contract field', 'serviceos-industry-hvac'),
+        ]);
+
+        $this->end_controls_section();
+
+        $this->start_controls_section('section_equipment', [
+            'label' => __('Equipment Ledger Options', 'serviceos-industry-hvac'),
+            'tab'   => Controls_Manager::TAB_CONTENT,
+        ]);
+
+        $this->add_control('auto_provision_assets', [
+            'label'        => __('Auto-Track New Assets', 'serviceos-industry-hvac'),
+            'description'  => __('If a serial number is unknown, automatically register it into the ServiceOS Equipment Tracking catalog.', 'serviceos-industry-hvac'),
+            'type'         => Controls_Manager::SWITCHER,
+            'label_on'     => __('Yes', 'serviceos-industry-hvac'),
+            'label_off'    => __('No', 'serviceos-industry-hvac'),
+            'return_value' => '1',
+            'default'      => '1',
+        ]);
+
+        $this->end_controls_section();
+
+        $this->start_controls_section('section_assignments', [
+            'label' => __('Team Assignments', 'serviceos-industry-hvac'),
+            'tab'   => Controls_Manager::TAB_CONTENT,
+        ]);
+
+        $this->add_control('enforce_technician_lock', [
+            'label'        => __('Enforce Assignment Lock', 'serviceos-industry-hvac'),
+            'description'  => __('Only allows the assigned Field Technician user to view or submit this interaction panel.', 'serviceos-industry-hvac'),
+            'type'         => Controls_Manager::SWITCHER,
+            'label_on'     => __('Lock', 'serviceos-industry-hvac'),
+            'label_off'    => __('Open', 'serviceos-industry-hvac'),
+            'return_value' => '1',
+            'default'      => '',
+        ]);
+
+        $this->end_controls_section();
+
         $this->start_controls_section('content_section', [
             'label' => __('Checklist Settings', 'serviceos-industry-hvac'),
             'tab'   => Controls_Manager::TAB_CONTENT,
@@ -46,20 +115,6 @@ class HVAC_Checklist_Widget extends Widget_Base {
             ],
         ]);
 
-        $this->add_control('ji_wo', [
-            'label'       => __('Work Order #', 'serviceos-industry-hvac'),
-            'type'        => Controls_Manager::TEXT,
-            'default'     => '',
-            'placeholder' => __('Optional — auto-fills WO field', 'serviceos-industry-hvac'),
-        ]);
-
-        $this->add_control('ji_contract', [
-            'label'       => __('Contract #', 'serviceos-industry-hvac'),
-            'type'        => Controls_Manager::TEXT,
-            'default'     => '',
-            'placeholder' => __('Optional — auto-fills Contract field', 'serviceos-industry-hvac'),
-        ]);
-
         $this->add_control('allow_wo_override', [
             'label'        => __('Allow Work Order Override', 'serviceos-industry-hvac'),
             'description'  => __('When off, the WO field is locked if pre-populated via URL or shortcode.', 'serviceos-industry-hvac'),
@@ -68,16 +123,6 @@ class HVAC_Checklist_Widget extends Widget_Base {
             'label_off'    => __('No', 'serviceos-industry-hvac'),
             'return_value' => '1',
             'default'      => '1',
-        ]);
-
-        $this->add_control('enforce_assignment_lock', [
-            'label'        => __('Enforce Assignment Lock', 'serviceos-industry-hvac'),
-            'description'  => __('When on, the technician name field becomes read-only.', 'serviceos-industry-hvac'),
-            'type'         => Controls_Manager::SWITCHER,
-            'label_on'     => __('On', 'serviceos-industry-hvac'),
-            'label_off'    => __('Off', 'serviceos-industry-hvac'),
-            'return_value' => '1',
-            'default'      => '',
         ]);
 
         $this->end_controls_section();
@@ -110,19 +155,31 @@ class HVAC_Checklist_Widget extends Widget_Base {
             $unit_count = '10';
         }
 
+        $wo_id = '';
+        if ('fixed_wo' === $settings['operational_mode']) {
+            $wo_id = $settings['fixed_work_order_id'] ?? '';
+        } elseif ('dynamic_url' === $settings['operational_mode']) {
+            $wo_id = isset($_GET['wo_id']) ? sanitize_text_field(wp_unslash($_GET['wo_id'])) : '';
+        }
+
+        $auto_track = $settings['auto_provision_assets'] ?? '1';
+        $technician_lock = $settings['enforce_technician_lock'] ?? '';
+
         $atts = [
-            'units'                     => $unit_count,
-            'ji_wo'                     => $settings['ji_wo'] ?? '',
-            'ji_contract'               => $settings['ji_contract'] ?? '',
-            'allow_wo_override'         => $settings['allow_wo_override'] ?? '1',
-            'enforce_assignment_lock'   => $settings['enforce_assignment_lock'] ?? '',
-            'navy_color'                => $settings['navy_color'] ?? '#001C32',
-            'orange_color'              => $settings['orange_color'] ?? '#E07820',
+            'units'                  => $unit_count,
+            'ji_wo'                  => $wo_id,
+            'ji_contract'            => $settings['ji_contract'] ?? '',
+            'allow_wo_override'      => $settings['allow_wo_override'] ?? '1',
+            'enforce_assignment_lock'=> $technician_lock,
+            'auto_track'             => $auto_track,
+            'technician_lock'        => $technician_lock,
+            'navy_color'             => $settings['navy_color'] ?? '#001C32',
+            'orange_color'           => $settings['orange_color'] ?? '#E07820',
         ];
 
         $shortcode_str = '[hvac_checklist';
         foreach ($atts as $key => $value) {
-            if (!empty($value) || $value === '0') {
+            if ($value !== '') {
                 $shortcode_str .= ' ' . $key . '="' . esc_attr($value) . '"';
             }
         }
