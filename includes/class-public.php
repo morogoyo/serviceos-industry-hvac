@@ -607,6 +607,8 @@ class Public_Checklist {
         global $wpdb;
         $table = $wpdb->prefix . 'hvac_unit_items';
 
+        $parent = $wpdb->prefix . 'hvac_submissions';
+
         return "CREATE TABLE {$table} (
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             submission_id BIGINT(20) UNSIGNED NOT NULL,
@@ -624,13 +626,17 @@ class Public_Checklist {
             status VARCHAR(20) DEFAULT '',
             PRIMARY KEY (id),
             KEY idx_submission_id (submission_id),
-            KEY idx_serial_number (serial_number)
+            KEY idx_serial_number (serial_number),
+            CONSTRAINT fk_hvac_units_submission
+                FOREIGN KEY (submission_id) REFERENCES {$parent}(id)
+                ON DELETE CASCADE
         ) {$wpdb->get_charset_collate()}";
     }
 
     private static function signoffs_table_sql() {
         global $wpdb;
         $table = $wpdb->prefix . 'hvac_signoffs';
+        $parent = $wpdb->prefix . 'hvac_submissions';
 
         return "CREATE TABLE {$table} (
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -640,7 +646,10 @@ class Public_Checklist {
             signature_data LONGTEXT,
             signed_at DATETIME DEFAULT NULL,
             PRIMARY KEY (id),
-            KEY idx_submission_id (submission_id)
+            KEY idx_submission_id (submission_id),
+            CONSTRAINT fk_hvac_signoffs_submission
+                FOREIGN KEY (submission_id) REFERENCES {$parent}(id)
+                ON DELETE CASCADE
         ) {$wpdb->get_charset_collate()}";
     }
 

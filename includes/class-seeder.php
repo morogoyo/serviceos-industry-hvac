@@ -48,6 +48,7 @@ class Seeder {
             'categories' => [
                 [
                     'name' => 'AC & Cooling',
+                    'slug' => 'ac-cooling',
                     'singular_label' => 'AC Job',
                     'plural_label' => 'AC & Cooling',
                     'icon' => 'ac_unit',
@@ -56,6 +57,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Heating',
+                    'slug' => 'heating',
                     'singular_label' => 'Heating Job',
                     'plural_label' => 'Heating',
                     'icon' => 'whatshot',
@@ -64,6 +66,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Repair & Diagnostics',
+                    'slug' => 'repair-diagnostics',
                     'singular_label' => 'Repair',
                     'plural_label' => 'Repairs & Diagnostics',
                     'icon' => 'handyman',
@@ -72,6 +75,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Air Quality',
+                    'slug' => 'air-quality',
                     'singular_label' => 'IAQ Job',
                     'plural_label' => 'Air Quality',
                     'icon' => 'air',
@@ -80,6 +84,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Ductwork',
+                    'slug' => 'ductwork',
                     'singular_label' => 'Duct Job',
                     'plural_label' => 'Ductwork',
                     'icon' => 'layers',
@@ -88,6 +93,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Thermostats & Controls',
+                    'slug' => 'thermostats-controls',
                     'singular_label' => 'Controls Job',
                     'plural_label' => 'Thermostats & Controls',
                     'icon' => 'sensors',
@@ -96,6 +102,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Maintenance Plans',
+                    'slug' => 'maintenance-plans',
                     'singular_label' => 'Maintenance',
                     'plural_label' => 'Maintenance Plans',
                     'icon' => 'event_repeat',
@@ -104,6 +111,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'Commercial HVAC',
+                    'slug' => 'commercial-hvac',
                     'singular_label' => 'Commercial Job',
                     'plural_label' => 'Commercial HVAC',
                     'icon' => 'business',
@@ -112,6 +120,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'New Construction',
+                    'slug' => 'new-construction',
                     'singular_label' => 'New Build',
                     'plural_label' => 'New Construction',
                     'icon' => 'construction',
@@ -120,6 +129,7 @@ class Seeder {
                 ],
                 [
                     'name' => 'General',
+                    'slug' => 'general',
                     'singular_label' => 'General',
                     'plural_label' => 'General',
                     'icon' => 'folder',
