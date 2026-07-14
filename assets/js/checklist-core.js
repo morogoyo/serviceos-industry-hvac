@@ -369,7 +369,7 @@ HVACChecklist.showSubmitSuccess = function(wid, msg) {
   banner.innerHTML = `<strong>✓ ${msg}</strong><br><small>A formatted report has been emailed to ${recipient}. You may now print this page or clear it for your next visit.</small>`;
   banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
   const btn = document.getElementById(`hvac_submit_btn_${wid}`);
-  if (btn) { btn.textContent = '✓ Submitted'; btn.style.background = '#10B981'; }
+  if (btn) { btn.disabled = false; btn.textContent = '✓ Submitted'; btn.style.background = '#10B981'; }
 };
 
 HVACChecklist.showSubmitError = function(wid, msg) {

@@ -469,10 +469,11 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     private function call_rest($route, $params = []) {
-        $request = new \WP_REST_Request('GET', '/crm/v1/' . $route);
-        foreach ($params as $key => $value) {
-            $request->set_param($key, $value);
+        $url = '/crm/v1/' . $route;
+        if (!empty($params)) {
+            $url .= '?' . http_build_query($params);
         }
+        $request = new \WP_REST_Request('GET', $url);
         $response = rest_do_request($request);
         if ($response->is_error()) {
             $error = $response->as_error();

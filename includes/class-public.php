@@ -295,6 +295,8 @@ class Public_Checklist {
             $per_page, $offset
         ));
 
+        error_log('[HVAC] GET submissions: total=' . $total . ', returning=' . count($submissions) . ', page=' . $page . ', per_page=' . $per_page);
+
         return rest_ensure_response([
             'data'     => $submissions,
             'total'    => $total,
@@ -568,6 +570,8 @@ class Public_Checklist {
         }
 
         $submission_id = $wpdb->insert_id;
+
+        error_log('[HVAC] Submission #' . $submission_id . ' saved. WO: ' . ($payload['ji_wo'] ?? '') . ', Property: ' . ($payload['ji_property'] ?? ''));
 
         if (!empty($payload['units'])) {
             foreach ($payload['units'] as $unit) {
