@@ -148,3 +148,194 @@ The implementation must adhere strictly to isolated feature lifecycles off the `
 2. Secure data handling: Use explicit SQL pagination on the list screen and guarantee that the detail layout accurately maps base64 signatures directly out of the `wp_hvac_signoffs` data rows.
 
 **Constraints:** Every page template file must tightly execute the shared template layout mechanism: require `layout-start.php` at the header and `layout-end.php` at the footer. Never break the unified CRM admin shell hierarchy.
+
+---
+
+## 🔌 PART 3: Harness Connectivity Guide (For New Industry Plugins)
+
+_Last updated: 2026-07-14 — to be merged into the skeleton `serviceos-industry-plugin` repo._
+
+This section documents everything a new industry plugin needs to connect to the CRM harness, based on the HVAC plugin implementation and all debugging sessions.
+
+---
+
+### 1. Plugin Bootstrap (`serviceos-industry-{industry}.php`)
+
+```php
+<?php
+// Plugin Name: ServiceOS {Industry}
+// Requires Plugins: service-os-crm
+
+define('SERVICEOS_IP_VERSION', '1.0.0');
+define('SERVICEOS_IP_PATH', plugin_dir_path(__FILE__));
+define('SERVICEOS_IP_URL', plugin_dir_url(__FILE__));
+
+require_once SERVICEOS_IP_PATH . 'includes/class-activator.php';
+require_once SERVICEOS_IP_PATH . 'includes/class-seeder.php';
+require_once SERVICEOS_IP_PATH . 'includes/class-harness.php';
+require_once SERVICEOS_IP_PATH . 'includes/class-assets.php';
+
+// Register hooks — public routes and migrations register immediately
+ServiceOS_Industry_Plugin\Public_Checklist::register();
+
+// CRM-dependent hooks wait for plugins_loaded
+add_action('plugins_loaded', function () {
+    if (!class_exists('Service_OS_CRM\\Harness\\Service_OS_CRM_Harness')) return;
+    ServiceOS_Industry_Plugin\Seeder::register();
+    ServiceOS_Industry_Plugin\Assets::register();
+    add_action('init', function () {
+        (new ServiceOS_Industry_Plugin\Harness())->register_with_crm();
+    }, 99);
+});
+```
+
+### 2. Harness Class (`includes/class-harness.php`)
+
+Must extend `Service_OS_CRM_Harness` with these methods:
+
+```php
+class Harness extends Service_OS_CRM_Harness {
+    protected $module_slug = 'my-industry';
+    protected $module_name = 'My Industry';
+    protected $module_icon = 'build';          // Material icon slug
+    protected $industry = 'General';
+}
+```
+
+**Required methods:**
+- `get_module_info()` — returns `name, slug, industry, description, menu_label, menu_icon, plugin_file, plugin_class, version`
+- `get_pages()` — returns array of `['slug' => '...', 'title' => '...', 'icon' => '...']`
+- `get_page_data($page_slug, $params)` — dispatches to per-page methods, returns schema arrays
+
+**Harness REST helper** (use instead of `$wpdb` for all page data):
+
+```php
+private function call_rest($route, $params = []) {
+    $request = new \WP_REST_Request('GET', '/crm/v1/' . $route);
+    foreach ($params as $key => $value) {
+        $request->set_param($key, $value);
+    }
+    $response = rest_do_request($request);
+    if (is_wp_error($response)) {
+        error_log('[Harness] REST error: ' . $route . ' — ' . $response->get_error_message());
+        return null;
+    }
+    if ($response instanceof \WP_REST_Response) {
+        if ($response->is_error()) return null;
+        $data = $response->get_data();
+    } else {
+        $data = $response; // raw array (WP 6.x+)
+    }
+    return json_decode(wp_json_encode($data), true);
+}
+```
+
+**CRM REST endpoints available:**
+| Endpoint | Params | Returns |
+|----------|--------|---------|
+| `services` | `business_id`, `module_slug` | Service list |
+| `services/{id}` | — | Single service |
+| `deals` | `business_id`, `status` | Deal list |
+| `categories` | `business_id` | Category list |
+| `pipelines` | `business_id` | Pipeline list |
+
+**Custom REST endpoints** for plugin-specific data should be registered in `includes/class-public.php` via `register_rest_route('crm/v1', '/{slug}/...', [...])`.
+
+### 3. Section Types (for `get_page_data()`)
+
+Submitted via `$data['sections'][] = [...]`. Available types:
+
+| Type | Section Keys | Description |
+|------|-------------|-------------|
+| `info_table` | `label, columns[], rows[][]` | Label-value table (pairs of `<th>` + `<td>`) |
+| `unit_overview` | `label, units[] (num, completion, status, status_color, notes, initials)` | Per-unit summary table |
+| `expandable_units` | `label, units[] (num, checks[], check_labels[], sup_temp, ret_temp, delta_t, filter_size, notes, initials)` | Per-unit collapsible cards with checklist tables |
+| `signoffs` | `label, items[] (label, checked)` | Sign-off checklist table |
+| `data_table` | `label, cols[], rows[][]` | Generic data table |
+| `html` | `content` | Raw HTML injected into page |
+
+**Collapsible wrapper** — any section can become collapsible by adding:
+```php
+'collapsible'     => true,
+'collapse_key'    => 'unique-key',
+'collapse_icon'   => 'material_icon_name',
+'collapse_badge'  => '<span class="crm-unit-badge">3 items</span>',
+```
+
+The page renderer wraps collapsible sections in `<details class="crm-section-card crm-collapsible-section">` with localStorage persistence (same pattern as contact-detail page).
+
+### 4. Database Tables
+
+**Activation:** `class-activator.php` calls `create_tables()` on plugin activation.
+
+**Migration:** `maybe_migrate_tables()` hooks to `plugins_loaded` and runs on every page load. It checks `hvac_schema_version` option and applies idempotent `ALTER TABLE` statements only if current version < target. Always use `SHOW COLUMNS` checks before each `ALTER TABLE`.
+
+```php
+$cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+if (!in_array('new_column', $cols, true)) {
+    $wpdb->query("ALTER TABLE {$table} ADD COLUMN new_column ...");
+}
+update_option('hvac_schema_version', SCHEMA_VERSION);
+```
+
+**Key rules:**
+- Never set schema version in `create_tables()` — only `maybe_migrate_tables()` controls it
+- Always `$wpdb->suppress_errors(true)` before DB operations in REST handlers
+- Use column-aware INSERTs: query `SHOW COLUMNS`, only insert into columns that exist
+- Handle merged schema scenarios (original questionnaire columns + migration columns coexisting)
+
+### 5. REST Endpoints
+
+**Registration** in `class-public.php`:
+```php
+add_action('rest_api_init', [__CLASS__, 'register_routes']);
+
+register_rest_route('crm/v1', '/{slug}/endpoint', [
+    'methods'             => 'GET',      // or POST
+    'callback'            => [$this, 'handler'],
+    'permission_callback'  => '__return_true',  // for internal use only
+]);
+```
+
+**POST endpoints** (form submissions) — use `__return_true` for permission (nonce validated separately).
+
+**GET endpoints** (harness data) — use `__return_true` when called only internally via `rest_do_request()`. The `current_user_can()` check can fail in internal dispatch context.
+
+**`$wpdb->print_error()`** — defaults to `true`, echoes HTML on query failure, corrupts REST JSON responses. Always call `$wpdb->suppress_errors(true)` before DB operations in REST handlers.
+
+### 6. Assets (`includes/class-assets.php`)
+
+```php
+// Admin: only on CRM pages
+wp_enqueue_style('serviceos-ip-module', ..., ['service-os-crm-dashboard']);
+wp_enqueue_script('serviceos-ip-module', ..., ['service-os-crm-api']);
+wp_localize_script('serviceos-ip-module', 'ServiceOSHVACConfig', [
+    'businessId' => (int) get_option('service_os_crm_business_id', 1),
+    'moduleSlug' => $module_slug,
+]);
+
+// Public: on specific pages/shortcodes
+wp_localize_script('{slug}-checklist-core', '{Slug}ChecklistConfig', [
+    'restUrl'   => rest_url('crm/v1/{slug}/checklist-submit'),
+    'restNonce' => wp_create_nonce('wp_rest'),
+]);
+```
+
+**JS dependencies:** `service-os-crm-api` provides `ServiceOSAPI`, `ServiceOSModal`, `ServiceOSToast`. Use `ServiceOSAPI.{resource}.{action}(businessId)` for CRM data — `ServiceOSAPI.services.create(data)`, `ServiceOSAPI.categories.list(businessId)`, etc.
+
+**CSS dependencies:** `service-os-crm-dashboard` provides all CRM variables (`--primary`, `--surface`, `--card-bg`, etc.) and component styles (cards, tables, modals, collapsible sections).
+
+### 7. Seeder (`includes/class-seeder.php`)
+
+Implements `Service_OS_CRM_Module_Seeder` interface. Must return categories, pipelines (with stages), and services. Hooked via `serviceos_crm_module_seed` filter. CRM handles DB insertion — just return the data arrays.
+
+### 8. Testing Checklist
+
+Before deploying a new industry plugin:
+1. Activate plugin → verify `hvac_*` tables created in DB
+2. Verify sidebar nav item appears with correct icon
+3. Verify list/detail/submissions pages render without errors
+4. Verify collapsible sections open/close and persist state across reloads
+5. Submit a public-facing form → verify data saves and appears in admin submissions list
+6. Check PHP error log for `[HVAC]` prefixed diagnostic messages
+7. In Docker: `docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW COLUMNS FROM wp_{slug}_submissions;"`
