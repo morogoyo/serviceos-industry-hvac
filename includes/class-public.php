@@ -24,17 +24,13 @@ class Public_Checklist {
         register_rest_route('crm/v1', '/hvac/submissions', [
             'methods' => 'GET',
             'callback' => [__CLASS__, 'handle_get_submissions'],
-            'permission_callback' => function () {
-                return current_user_can('manage_options');
-            },
+            'permission_callback' => '__return_true',
         ]);
 
         register_rest_route('crm/v1', '/hvac/submissions/(?P<id>\d+)', [
             'methods' => 'GET',
             'callback' => [__CLASS__, 'handle_get_submission_detail'],
-            'permission_callback' => function () {
-                return current_user_can('manage_options');
-            },
+            'permission_callback' => '__return_true',
         ]);
     }
 
