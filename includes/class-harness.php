@@ -475,10 +475,13 @@ class Harness extends Service_OS_CRM_Harness {
         }
         $response = rest_do_request($request);
         if ($response->is_error()) {
+            $error = $response->as_error();
+            error_log('[HVAC Harness] REST call failed: ' . $route . ' — ' . $error->get_error_message());
             return null;
         }
         $data = $response->get_data();
         if ($data === null) {
+            error_log('[HVAC Harness] REST call returned null data: ' . $route);
             return null;
         }
         return json_decode(wp_json_encode($data), true);
