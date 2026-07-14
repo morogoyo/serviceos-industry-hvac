@@ -477,7 +477,11 @@ class Harness extends Service_OS_CRM_Harness {
         if ($response->is_error()) {
             return null;
         }
-        return $response->get_data();
+        $data = $response->get_data();
+        if ($data === null) {
+            return null;
+        }
+        return json_decode(wp_json_encode($data), true);
     }
 
     private function get_business_id(): int {
