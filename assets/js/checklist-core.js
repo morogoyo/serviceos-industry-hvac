@@ -462,6 +462,24 @@ HVACChecklist.submitREST = function(wid, count, key, restUrl, nonce) {
     });
   });
 
+  const techSig = document.getElementById('hvac_tech_sig_' + wid);
+  const techSigDate = document.getElementById('hvac_tech_sig_date_' + wid);
+  payload.signoffs.push({
+    signoff_type: 'technician_signature',
+    printed_name: techSig ? techSig.value.trim() : '',
+    signature_data: techSig ? techSig.value.trim() : '',
+    signed_at: techSigDate ? techSigDate.value : '',
+  });
+
+  const clientSig = document.getElementById('hvac_client_sig_' + wid);
+  const clientSigDate = document.getElementById('hvac_client_sig_date_' + wid);
+  payload.signoffs.push({
+    signoff_type: 'client_signature',
+    printed_name: clientSig ? clientSig.value.trim() : '',
+    signature_data: clientSig ? clientSig.value.trim() : '',
+    signed_at: clientSigDate ? clientSigDate.value : '',
+  });
+
   fetch(restUrl, {
     method: 'POST',
     headers: {

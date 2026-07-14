@@ -46,46 +46,49 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     protected function get_list_data(array $params): array {
-        global $wpdb;
+        $business_id = $this->get_business_id();
 
-        $business_id = (int) get_option('service_os_crm_business_id', 0);
+        $services_data = $this->call_rest('services', [
+            'business_id' => $business_id,
+            'module_slug' => 'hvac',
+        ]);
 
-        $services = $wpdb->get_results($wpdb->prepare(
-            "SELECT s.id, s.title, s.status, s.value, s.pipeline_id, s.stage_id,
-                    c.name AS category_name, c.slug AS category_slug, c.color AS category_color
-             FROM {$wpdb->prefix}crm_services s
-             LEFT JOIN {$wpdb->prefix}crm_service_categories c ON s.category_id = c.id
-             WHERE s.module_slug = 'hvac'
-             AND s.business_id = %d
-             ORDER BY c.name, s.title",
-            $business_id
-        ));
+        $deals_data = $this->call_rest('deals', [
+            'business_id' => $business_id,
+        ]);
 
-        $total = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}crm_services
-             WHERE module_slug = 'hvac' AND business_id = %d",
-            $business_id
-        ));
+        $submissions_data = $this->call_rest('hvac/submissions', ['per_page' => 1]);
 
-        $submission_count = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}hvac_submissions"
-        );
+        $services = [];
+        $total = 0;
+        if (is_array($services_data)) {
+            $total = count($services_data);
+            $services = $services_data;
+        }
 
-        $open_deals = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}crm_deals d
-             WHERE d.business_id = %d
-             AND d.status NOT IN ('won', 'lost')",
-            $business_id
-        ));
+        $open_deals = 0;
+        if (is_array($deals_data)) {
+            foreach ($deals_data as $d) {
+                $status = $d['status'] ?? '';
+                if ($status !== 'won' && $status !== 'lost') {
+                    $open_deals++;
+                }
+            }
+        }
+
+        $submission_count = 0;
+        if (is_array($submissions_data) && isset($submissions_data['total'])) {
+            $submission_count = (int) $submissions_data['total'];
+        }
 
         $rows = [];
         foreach ($services as $svc) {
             $rows[] = [
-                $svc->id,
-                $svc->title,
-                $svc->category_name ?? '—',
-                $svc->status,
-                '$' . number_format((float) $svc->value, 2),
+                $svc['id'] ?? '',
+                $svc['title'] ?? '',
+                $svc['category_name'] ?? '—',
+                $svc['status'] ?? '',
+                '$' . number_format((float) ($svc['value'] ?? 0), 2),
             ];
         }
 
@@ -159,37 +162,22 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     protected function get_detail_data(array $params): array {
-        global $wpdb;
-
         $item_id = absint($params['id'] ?? 0);
         if ($item_id === 0) {
             return ['type' => 'detail', 'title' => 'Not Found'];
         }
 
-        $svc = $wpdb->get_row($wpdb->prepare(
-            "SELECT s.id, s.title, s.status, s.value, s.milestone, s.duration,
-                    s.pipeline_id, s.stage_id,
-                    c.name AS category_name, c.slug AS category_slug, c.color AS category_color,
-                    p.name AS pipeline_name,
-                    ps.name AS stage_name
-             FROM {$wpdb->prefix}crm_services s
-             LEFT JOIN {$wpdb->prefix}crm_service_categories c ON s.category_id = c.id
-             LEFT JOIN {$wpdb->prefix}crm_pipelines p ON s.pipeline_id = p.id
-             LEFT JOIN {$wpdb->prefix}crm_pipeline_stages ps ON s.stage_id = ps.id
-             WHERE s.id = %d",
-            $item_id
-        ));
-
-        if (!$svc) {
+        $svc = $this->call_rest('services/' . $item_id);
+        if (!$svc || !is_array($svc)) {
             return ['type' => 'detail', 'title' => 'Not Found'];
         }
 
         $data = $this->get_standard_schema();
         $data['type'] = 'detail';
-        $data['title'] = $svc->title;
-        $data['subtitle'] = ($svc->category_name ?? 'Uncategorized') . ' · ' . ucfirst($svc->status);
-        $data['tags'] = [$svc->category_name ?? 'General'];
-        $data['hero_stat'] = ['label' => 'Value', 'value' => '$' . number_format((float) $svc->value, 2)];
+        $data['title'] = $svc['title'] ?? '';
+        $data['subtitle'] = ($svc['category_name'] ?? 'Uncategorized') . ' · ' . ucfirst($svc['status'] ?? '');
+        $data['tags'] = [$svc['category_name'] ?? 'General'];
+        $data['hero_stat'] = ['label' => 'Value', 'value' => '$' . number_format((float) ($svc['value'] ?? 0), 2)];
         $data['toolbar'] = [
             ['type' => 'back', 'url' => admin_url('admin.php?page=service-os-crm-module-hvac'), 'label' => 'Back to Dashboard'],
             ['type' => 'action', 'label' => 'Create Deal', 'onclick' => 'window.ServiceOSHVAC.createDeal(' . $item_id . ')'],
@@ -201,22 +189,22 @@ class Harness extends Service_OS_CRM_Harness {
                 'label' => 'Service Info',
                 'columns' => ['Field', 'Value'],
                 'rows' => [
-                    ['Status', ucfirst($svc->status)],
-                    ['Category', $svc->category_name ?? '—'],
-                    ['Pipeline', $svc->pipeline_name ?? '—'],
-                    ['Current Stage', $svc->stage_name ?? '—'],
-                    ['Milestone', $svc->milestone ? $svc->milestone . '%' : '0%'],
-                    ['Duration', $svc->duration ? $svc->duration . ' hrs' : '—'],
+                    ['Status', ucfirst($svc['status'] ?? '')],
+                    ['Category', $svc['category_name'] ?? '—'],
+                    ['Pipeline', $svc['pipeline_name'] ?? '—'],
+                    ['Current Stage', $svc['stage_name'] ?? '—'],
+                    ['Milestone', isset($svc['milestone']) && $svc['milestone'] ? $svc['milestone'] . '%' : '0%'],
+                    ['Duration', isset($svc['duration']) && $svc['duration'] ? $svc['duration'] . ' hrs' : '—'],
                 ],
             ],
         ];
 
         $data['sidebar_meta'] = [
-            ['label' => 'Service ID', 'value' => (string) $svc->id],
-            ['label' => 'Category', 'value' => $svc->category_name ?? '—'],
-            ['label' => 'Pipeline', 'value' => $svc->pipeline_name ?? '—'],
-            ['label' => 'Stage', 'value' => $svc->stage_name ?? '—'],
-            ['label' => 'Value', 'value' => '$' . number_format((float) $svc->value, 2)],
+            ['label' => 'Service ID', 'value' => (string) $item_id],
+            ['label' => 'Category', 'value' => $svc['category_name'] ?? '—'],
+            ['label' => 'Pipeline', 'value' => $svc['pipeline_name'] ?? '—'],
+            ['label' => 'Stage', 'value' => $svc['stage_name'] ?? '—'],
+            ['label' => 'Value', 'value' => '$' . number_format((float) ($svc['value'] ?? 0), 2)],
         ];
 
         return $data;
@@ -225,32 +213,39 @@ class Harness extends Service_OS_CRM_Harness {
     // ===== FIELD CHECKLIST SUBMISSIONS =====
 
     protected function get_submission_list(array $params): array {
-        global $wpdb;
-
-        $table = $wpdb->prefix . 'hvac_submissions';
         $per_page = 20;
         $page = max(1, absint($params['page'] ?? ($_GET['page_num'] ?? 1)));
-        $offset = ($page - 1) * $per_page;
 
-        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+        $submissions_data = $this->call_rest('hvac/submissions', [
+            'page'     => $page,
+            'per_page' => $per_page,
+        ]);
 
-        $submissions = $wpdb->get_results($wpdb->prepare(
-            "SELECT s.*, u.display_name AS technician_name
-             FROM {$table} s
-             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
-             ORDER BY s.created_at DESC
-             LIMIT %d OFFSET %d",
-            $per_page, $offset
-        ));
+        $submissions = [];
+        $total = 0;
+        $recent = 0;
+        $unique_techs = 0;
 
-        $recent = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE created_at >= %s",
-            date('Y-m-d H:i:s', strtotime('-30 days'))
-        ));
+        if (is_array($submissions_data)) {
+            $submissions = $submissions_data['data'] ?? [];
+            $total      = (int) ($submissions_data['total'] ?? 0);
+        }
 
-        $unique_techs = (int) $wpdb->get_var(
-            "SELECT COUNT(DISTINCT technician_id) FROM {$table} WHERE technician_id > 0"
-        );
+        foreach ($submissions as $s) {
+            $created = $s['created_at'] ?? '';
+            if ($created >= date('Y-m-d H:i:s', strtotime('-30 days'))) {
+                $recent++;
+            }
+        }
+
+        $tech_ids = [];
+        foreach ($submissions as $s) {
+            $tid = $s['technician_id'] ?? 0;
+            if ($tid > 0) {
+                $tech_ids[$tid] = true;
+            }
+        }
+        $unique_techs = count($tech_ids);
 
         $data = $this->get_standard_schema();
         $data['type'] = 'list';
@@ -269,17 +264,20 @@ class Harness extends Service_OS_CRM_Harness {
         } else {
             $table_html .= '<div style="overflow-x:auto;">';
             $table_html .= '<table class="crm-table">';
-            $table_html .= '<thead><tr><th>ID</th><th>Contract</th><th>Work Order</th><th>Technician</th><th>Submitted</th><th>Actions</th></tr></thead>';
+            $table_html .= '<thead><tr><th>ID</th><th>Property</th><th>Date</th><th>Contract</th><th>Work Order</th><th>Technician</th><th>Visit</th><th>Submitted</th><th>Actions</th></tr></thead>';
             $table_html .= '<tbody>';
             foreach ($submissions as $s) {
-                $view_url = esc_url(add_query_arg('id', $s->id, $detail_url));
-                $tech_name = esc_html($s->technician_name ?: 'User #' . $s->technician_id);
+                $view_url = esc_url(add_query_arg('id', $s['id'], $detail_url));
+                $tech_name = esc_html($s['technician_name'] ?: 'User #' . ($s['technician_id'] ?? 0));
                 $table_html .= '<tr>';
-                $table_html .= '<td><a href="' . $view_url . '">#' . (int) $s->id . '</a></td>';
-                $table_html .= '<td>' . esc_html($s->ji_contract ?: '—') . '</td>';
-                $table_html .= '<td>' . esc_html($s->ji_wo ?: '—') . '</td>';
+                $table_html .= '<td><a href="' . $view_url . '">#' . (int) $s['id'] . '</a></td>';
+                $table_html .= '<td>' . esc_html($s['ji_property'] ?: '—') . '</td>';
+                $table_html .= '<td>' . esc_html($s['ji_date'] ?: '—') . '</td>';
+                $table_html .= '<td>' . esc_html($s['ji_contract'] ?: '—') . '</td>';
+                $table_html .= '<td>' . esc_html($s['ji_wo'] ?: '—') . '</td>';
                 $table_html .= '<td>' . $tech_name . '</td>';
-                $table_html .= '<td>' . esc_html($s->created_at) . '</td>';
+                $table_html .= '<td>' . esc_html($s['ji_visit'] ?: '—') . '</td>';
+                $table_html .= '<td>' . esc_html($s['created_at']) . '</td>';
                 $table_html .= '<td><a href="' . $view_url . '">View</a></td>';
                 $table_html .= '</tr>';
             }
@@ -310,49 +308,29 @@ class Harness extends Service_OS_CRM_Harness {
     }
 
     protected function get_submission_detail(array $params): array {
-        global $wpdb;
-
         $submission_id = absint($params['id'] ?? 0);
         if ($submission_id === 0) {
             return ['type' => 'detail', 'title' => 'Not Found'];
         }
 
-        $sub_table = $wpdb->prefix . 'hvac_submissions';
-        $items_table = $wpdb->prefix . 'hvac_unit_items';
-        $signoffs_table = $wpdb->prefix . 'hvac_signoffs';
-
-        $submission = $wpdb->get_row($wpdb->prepare(
-            "SELECT s.*, u.display_name AS technician_name
-             FROM {$sub_table} s
-             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
-             WHERE s.id = %d",
-            $submission_id
-        ));
-
-        if (!$submission) {
+        $submission = $this->call_rest('hvac/submissions/' . $submission_id);
+        if (!$submission || !is_array($submission)) {
             return ['type' => 'detail', 'title' => 'Not Found'];
         }
 
-        $unit_items = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$items_table} WHERE submission_id = %d ORDER BY unit_number",
-            $submission_id
-        ));
-
-        $signoffs = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$signoffs_table} WHERE submission_id = %d",
-            $submission_id
-        ));
+        $unit_items = $submission['units'] ?? [];
+        $signoffs = $submission['signoffs'] ?? [];
 
         $back_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions');
         $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
         $delete_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id);
 
-        $tech_name = $submission->technician_name ?: 'User #' . $submission->technician_id;
+        $tech_name = $submission['technician_name'] ?: 'User #' . ($submission['technician_id'] ?? 0);
 
         $data = $this->get_standard_schema();
         $data['type'] = 'detail';
-        $data['title'] = 'Submission #' . $submission->id;
-        $data['subtitle'] = $tech_name . ' · ' . $submission->created_at;
+        $data['title'] = 'Submission #' . $submission['id'];
+        $data['subtitle'] = $tech_name . ' · ' . ($submission['created_at'] ?? '');
         $data['hero_stat'] = ['label' => 'Equipment Units', 'value' => (string) count($unit_items)];
         $data['tags'] = ['HVAC', 'Field Checklist'];
         $data['toolbar'] = [
@@ -364,13 +342,15 @@ class Harness extends Service_OS_CRM_Harness {
         $data['sections'][] = [
             'type' => 'info_table',
             'label' => 'Job Info',
-            'columns' => ['Contract', 'Work Order', 'Technician', 'Client ID', 'Submitted'],
+            'columns' => ['Property', 'Date', 'Work Order', 'Contract', 'Technician', 'Visit Type', 'Submitted'],
             'rows' => [[
-                $submission->ji_contract ?: '—',
-                $submission->ji_wo ?: '—',
+                $submission['ji_property'] ?: '—',
+                $submission['ji_date'] ?: '—',
+                $submission['ji_wo'] ?: '—',
+                $submission['ji_contract'] ?: '—',
                 $tech_name,
-                $submission->client_id ?: '—',
-                $submission->created_at,
+                $submission['ji_visit'] ?: '—',
+                $submission['created_at'],
             ]],
         ];
 
@@ -392,9 +372,18 @@ class Harness extends Service_OS_CRM_Harness {
 
         $signoff_items = [];
         foreach ($signoffs as $so) {
-            $sig_label = ucfirst($so->signoff_type) . ': ' . ($so->printed_name ?: '—');
-            if (!empty($so->signature_data)) {
-                $sig_label .= ' <img src="' . esc_attr($so->signature_data) . '" style="max-height:60px;display:block;margin-top:4px;" alt="Signature">';
+            $sig_label = '';
+            $so_type = $so['signoff_type'] ?? '';
+            if ($so_type === 'technician_signature' || $so_type === 'client_signature') {
+                $label = $so_type === 'technician_signature' ? 'Technician Signature' : 'Client / Rep Signature';
+                $name = $so['printed_name'] ?: '—';
+                $date = $so['signed_at'] ?: '—';
+                $sig_label = $label . ': ' . $name . ' (' . $date . ')';
+            } else {
+                $sig_label = $so['printed_name'] ?: '—';
+                if (!empty($so['signature_data'])) {
+                    $sig_label .= ' <img src="' . esc_attr($so['signature_data']) . '" style="max-height:60px;display:block;margin-top:4px;" alt="Signature">';
+                }
             }
             $signoff_items[] = [
                 'label'   => $sig_label,
@@ -410,12 +399,12 @@ class Harness extends Service_OS_CRM_Harness {
         }
 
         $data['sidebar_meta'] = [
-            ['label' => 'Submission ID', 'value' => (string) $submission->id],
-            ['label' => 'Contract', 'value' => $submission->ji_contract ?: '—'],
-            ['label' => 'Work Order', 'value' => $submission->ji_wo ?: '—'],
+            ['label' => 'Submission ID', 'value' => (string) $submission['id']],
+            ['label' => 'Contract', 'value' => $submission['ji_contract'] ?: '—'],
+            ['label' => 'Work Order', 'value' => $submission['ji_wo'] ?: '—'],
             ['label' => 'Technician', 'value' => $tech_name],
-            ['label' => 'Client ID', 'value' => $submission->client_id ?: '—'],
-            ['label' => 'Submitted', 'value' => $submission->created_at],
+            ['label' => 'Client ID', 'value' => $submission['client_id'] ?: '—'],
+            ['label' => 'Submitted', 'value' => $submission['created_at']],
         ];
 
         return $data;
@@ -425,17 +414,19 @@ class Harness extends Service_OS_CRM_Harness {
         $units = [];
         $grouped = [];
         foreach ($items as $item) {
-            $grouped[(int) $item->unit_number][] = $item;
+            $grouped[(int) $item['unit_number']][] = $item;
         }
         foreach ($grouped as $unit_num => $unit_items) {
-            $checks = json_decode($unit_items[0]->checks_json, true) ?: [];
+            $first = $unit_items[0];
+            $checks = json_decode($first['checks_json'], true) ?: [];
             $checked = 0;
             $total = count($checks);
             foreach ($checks as $v) {
                 if ($v) $checked++;
             }
             $completion = $total > 0 ? ($checked . '/' . $total) : '0/0';
-            $status = $checked >= $total ? 'ok' : ($checked > 0 ? 'mon' : 'action');
+            $db_status = $first['status'] ?: 'none';
+            $status = in_array($db_status, ['ok', 'mon', 'action']) ? $db_status : ($checked >= $total ? 'ok' : ($checked > 0 ? 'mon' : 'action'));
             $colors = ['ok' => '#2ecc71', 'mon' => '#f59e0b', 'action' => '#ef4444'];
 
             $units[] = [
@@ -443,8 +434,8 @@ class Harness extends Service_OS_CRM_Harness {
                 'completion'   => $completion,
                 'status'       => $status,
                 'status_color' => $colors[$status] ?? '#999',
-                'notes'        => $unit_items[0]->model_number ?: '',
-                'initials'     => $unit_items[0]->serial_number ?: '',
+                'notes'        => $first['notes'] ?: '',
+                'initials'     => $first['init'] ?: '',
             ];
         }
         return $units;
@@ -454,11 +445,11 @@ class Harness extends Service_OS_CRM_Harness {
         $units = [];
         $grouped = [];
         foreach ($items as $item) {
-            $grouped[(int) $item->unit_number][] = $item;
+            $grouped[(int) $item['unit_number']][] = $item;
         }
         foreach ($grouped as $unit_num => $unit_items) {
             $item = $unit_items[0];
-            $checks_map = json_decode($item->checks_json, true) ?: [];
+            $checks_map = json_decode($item['checks_json'], true) ?: [];
             $labels = array_keys($checks_map);
             $checks = array_values($checks_map);
 
@@ -466,15 +457,30 @@ class Harness extends Service_OS_CRM_Harness {
                 'num'          => $unit_num,
                 'checks'       => $checks,
                 'check_labels' => $labels,
-                'sup_temp'     => $item->equipment_type ?: '',
-                'ret_temp'     => $item->model_number ?: '',
-                'delta_t'      => $item->serial_number ?: '',
-                'filter_size'  => '',
-                'notes'        => $item->serial_number ? 'S/N: ' . $item->serial_number : '',
-                'initials'     => $item->model_number ?: '',
+                'sup_temp'     => $item['sup'] ?: '',
+                'ret_temp'     => $item['ret'] ?: '',
+                'delta_t'      => $item['dt'] ?: '',
+                'filter_size'  => $item['fs'] ?: '',
+                'notes'        => $item['notes'] ?: '',
+                'initials'     => $item['init'] ?: '',
             ];
         }
         return $units;
     }
 
+    private function call_rest($route, $params = []) {
+        $request = new \WP_REST_Request('GET', '/crm/v1/' . $route);
+        foreach ($params as $key => $value) {
+            $request->set_param($key, $value);
+        }
+        $response = rest_do_request($request);
+        if ($response->is_error()) {
+            return null;
+        }
+        return $response->get_data();
+    }
+
+    private function get_business_id(): int {
+        return (int) get_option('service_os_crm_business_id', 0);
+    }
 }

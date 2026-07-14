@@ -5,6 +5,7 @@ class Activator {
     public static function activate() {
         update_option('serviceos_ip_seed_pending', true);
         Public_Checklist::create_tables();
+        Public_Checklist::maybe_migrate_tables();
     }
 
     public static function deactivate() {

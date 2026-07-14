@@ -11,6 +11,7 @@ class Public_Checklist {
         add_shortcode('hvac_checklist', [__CLASS__, 'render_checklist']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
+        add_action('plugins_loaded', [__CLASS__, 'maybe_migrate_tables']);
     }
 
     public static function register_routes() {
@@ -18,6 +19,22 @@ class Public_Checklist {
             'methods' => 'POST',
             'callback' => [__CLASS__, 'handle_submission'],
             'permission_callback' => '__return_true',
+        ]);
+
+        register_rest_route('crm/v1', '/hvac/submissions', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_get_submissions'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
+        ]);
+
+        register_rest_route('crm/v1', '/hvac/submissions/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_get_submission_detail'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
         ]);
     }
 
@@ -160,13 +177,13 @@ class Public_Checklist {
     <div class="hvac-sig-row">
       <div class="hvac-sig-block">
         <label>Technician Signature</label>
-        <input class="hvac-sig-line" type="text" placeholder="Sign here">
-        <div class="hvac-sig-date">Date: <input type="date"></div>
+        <input class="hvac-sig-line" type="text" placeholder="Sign here" id="hvac_tech_sig_<?php echo esc_attr($wid); ?>">
+        <div class="hvac-sig-date">Date: <input type="date" id="hvac_tech_sig_date_<?php echo esc_attr($wid); ?>"></div>
       </div>
       <div class="hvac-sig-block">
         <label>Client / Authorized Rep Signature</label>
-        <input class="hvac-sig-line" type="text" placeholder="Sign here">
-        <div class="hvac-sig-date">Date: <input type="date"></div>
+        <input class="hvac-sig-line" type="text" placeholder="Sign here" id="hvac_client_sig_<?php echo esc_attr($wid); ?>">
+        <div class="hvac-sig-date">Date: <input type="date" id="hvac_client_sig_date_<?php echo esc_attr($wid); ?>"></div>
       </div>
     </div>
     <div class="hvac-disclaimer">Technician signature confirms all items above were inspected and serviced. Client/rep signature confirms work completed to satisfaction.</div>
@@ -264,6 +281,69 @@ class Public_Checklist {
         return rest_ensure_response($response);
     }
 
+    public static function handle_get_submissions($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'hvac_submissions';
+        $per_page = absint($request->get_param('per_page')) ?: 20;
+        $page = max(1, absint($request->get_param('page')) ?: 1);
+        $offset = ($page - 1) * $per_page;
+
+        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+
+        $submissions = $wpdb->get_results($wpdb->prepare(
+            "SELECT s.*, u.display_name AS technician_name
+             FROM {$table} s
+             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
+             ORDER BY s.created_at DESC
+             LIMIT %d OFFSET %d",
+            $per_page, $offset
+        ));
+
+        return rest_ensure_response([
+            'data'     => $submissions,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $per_page,
+        ]);
+    }
+
+    public static function handle_get_submission_detail($request) {
+        global $wpdb;
+
+        $submission_id = absint($request->get_param('id'));
+        if ($submission_id === 0) {
+            return new \WP_Error('rest_not_found', 'Submission not found.', ['status' => 404]);
+        }
+
+        $sub_table = $wpdb->prefix . 'hvac_submissions';
+        $items_table = $wpdb->prefix . 'hvac_unit_items';
+        $signoffs_table = $wpdb->prefix . 'hvac_signoffs';
+
+        $submission = $wpdb->get_row($wpdb->prepare(
+            "SELECT s.*, u.display_name AS technician_name
+             FROM {$sub_table} s
+             LEFT JOIN {$wpdb->users} u ON s.technician_id = u.ID
+             WHERE s.id = %d",
+            $submission_id
+        ));
+
+        if (!$submission) {
+            return new \WP_Error('rest_not_found', 'Submission not found.', ['status' => 404]);
+        }
+
+        $submission->units = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$items_table} WHERE submission_id = %d ORDER BY unit_number",
+            $submission_id
+        ));
+
+        $submission->signoffs = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$signoffs_table} WHERE submission_id = %d",
+            $submission_id
+        ));
+
+        return rest_ensure_response($submission);
+    }
+
     private static function register_equipment_and_create_deal($payload, $submission_id) {
         global $wpdb;
         $business_id = (int) get_option('service_os_crm_business_id', 0);
@@ -352,6 +432,59 @@ class Public_Checklist {
         ];
 
         dbDelta($tables);
+
+        self::update_schema_version(2);
+    }
+
+    const SCHEMA_VERSION = 2;
+
+    public static function maybe_migrate_tables() {
+        $current = (int) get_option('hvac_schema_version', 1);
+        if ($current >= self::SCHEMA_VERSION) {
+            return;
+        }
+
+        global $wpdb;
+
+        $sub_table = $wpdb->prefix . 'hvac_submissions';
+        $items_table = $wpdb->prefix . 'hvac_unit_items';
+
+        if ($current < 2) {
+            $cols = $wpdb->get_col("SHOW COLUMNS FROM {$sub_table}");
+            $sub_migrations = [
+                'ji_property' => "ALTER TABLE {$sub_table} ADD COLUMN ji_property VARCHAR(255) DEFAULT NULL AFTER ji_wo",
+                'ji_date'     => "ALTER TABLE {$sub_table} ADD COLUMN ji_date DATE DEFAULT NULL AFTER ji_property",
+                'ji_tech'     => "ALTER TABLE {$sub_table} ADD COLUMN ji_tech VARCHAR(255) DEFAULT NULL AFTER ji_date",
+                'ji_visit'    => "ALTER TABLE {$sub_table} ADD COLUMN ji_visit VARCHAR(100) DEFAULT NULL AFTER ji_tech",
+            ];
+            foreach ($sub_migrations as $col => $sql) {
+                if (!in_array($col, $cols, true)) {
+                    $wpdb->query($sql);
+                }
+            }
+
+            $icols = $wpdb->get_col("SHOW COLUMNS FROM {$items_table}");
+            $items_migrations = [
+                'sup'    => "ALTER TABLE {$items_table} ADD COLUMN sup VARCHAR(20) DEFAULT '' AFTER checks_json",
+                'ret'    => "ALTER TABLE {$items_table} ADD COLUMN ret VARCHAR(20) DEFAULT '' AFTER sup",
+                'dt'     => "ALTER TABLE {$items_table} ADD COLUMN dt VARCHAR(20) DEFAULT '' AFTER ret",
+                'fs'     => "ALTER TABLE {$items_table} ADD COLUMN fs VARCHAR(50) DEFAULT '' AFTER dt",
+                'notes'  => "ALTER TABLE {$items_table} ADD COLUMN notes TEXT AFTER fs",
+                'init'   => "ALTER TABLE {$items_table} ADD COLUMN init VARCHAR(10) DEFAULT '' AFTER notes",
+                'status' => "ALTER TABLE {$items_table} ADD COLUMN status VARCHAR(20) DEFAULT '' AFTER init",
+            ];
+            foreach ($items_migrations as $col => $sql) {
+                if (!in_array($col, $icols, true)) {
+                    $wpdb->query($sql);
+                }
+            }
+        }
+
+        self::update_schema_version(self::SCHEMA_VERSION);
+    }
+
+    private static function update_schema_version($version) {
+        update_option('hvac_schema_version', $version);
     }
 
     private static function submissions_table_sql() {
@@ -362,6 +495,10 @@ class Public_Checklist {
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             ji_contract VARCHAR(100) DEFAULT NULL,
             ji_wo VARCHAR(100) DEFAULT NULL,
+            ji_property VARCHAR(255) DEFAULT NULL,
+            ji_date DATE DEFAULT NULL,
+            ji_tech VARCHAR(255) DEFAULT NULL,
+            ji_visit VARCHAR(100) DEFAULT NULL,
             technician_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
             client_id BIGINT(20) UNSIGNED DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -381,6 +518,13 @@ class Public_Checklist {
             serial_number VARCHAR(100) DEFAULT '',
             model_number VARCHAR(100) DEFAULT '',
             checks_json LONGTEXT,
+            sup VARCHAR(20) DEFAULT '',
+            ret VARCHAR(20) DEFAULT '',
+            dt VARCHAR(20) DEFAULT '',
+            fs VARCHAR(50) DEFAULT '',
+            notes TEXT,
+            init VARCHAR(10) DEFAULT '',
+            status VARCHAR(20) DEFAULT '',
             PRIMARY KEY (id),
             KEY idx_submission_id (submission_id),
             KEY idx_serial_number (serial_number)
@@ -411,11 +555,15 @@ class Public_Checklist {
             [
                 'ji_contract'   => sanitize_text_field($payload['ji_contract'] ?? ''),
                 'ji_wo'         => sanitize_text_field($payload['ji_wo'] ?? ''),
+                'ji_property'   => sanitize_text_field($payload['ji_property'] ?? ''),
+                'ji_date'       => sanitize_text_field($payload['ji_date'] ?? ''),
+                'ji_tech'       => sanitize_text_field($payload['ji_tech'] ?? ''),
+                'ji_visit'      => sanitize_text_field($payload['ji_visit'] ?? ''),
                 'technician_id' => absint($payload['technician_id'] ?? 0),
                 'client_id'     => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
                 'created_at'    => current_time('mysql'),
             ],
-            ['%s', '%s', '%d', '%d', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s']
         );
 
         if (!$result) {
@@ -438,8 +586,15 @@ class Public_Checklist {
                         'checks_json'     => is_array($unit['checks_json'] ?? null)
                             ? json_encode($unit['checks_json'])
                             : sanitize_textarea_field($unit['checks_json'] ?? ''),
+                        'sup'             => sanitize_text_field($unit['sup'] ?? ''),
+                        'ret'             => sanitize_text_field($unit['ret'] ?? ''),
+                        'dt'              => sanitize_text_field($unit['dt'] ?? ''),
+                        'fs'              => sanitize_text_field($unit['fs'] ?? ''),
+                        'notes'           => sanitize_textarea_field($unit['notes'] ?? ''),
+                        'init'            => sanitize_text_field($unit['init'] ?? ''),
+                        'status'          => sanitize_text_field($unit['status'] ?? ''),
                     ],
-                    ['%d', '%d', '%s', '%s', '%s', '%s']
+                    ['%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
                 );
             }
         }
