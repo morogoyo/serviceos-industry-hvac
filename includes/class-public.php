@@ -430,8 +430,6 @@ class Public_Checklist {
         ];
 
         dbDelta($tables);
-
-        self::update_schema_version(2);
     }
 
     const SCHEMA_VERSION = 2;
