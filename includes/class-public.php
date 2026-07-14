@@ -448,6 +448,7 @@ class Public_Checklist {
         $items_table = $wpdb->prefix . 'hvac_unit_items';
 
         if ($current < 2) {
+            $wpdb->suppress_errors(true);
             $cols = $wpdb->get_col("SHOW COLUMNS FROM {$sub_table}");
             $sub_migrations = [
                 'ji_property' => "ALTER TABLE {$sub_table} ADD COLUMN ji_property VARCHAR(255) DEFAULT NULL AFTER ji_wo",
@@ -476,9 +477,14 @@ class Public_Checklist {
                     $wpdb->query($sql);
                 }
             }
+            $wpdb->suppress_errors(false);
         }
 
+        $wpdb->suppress_errors(false);
+
         self::update_schema_version(self::SCHEMA_VERSION);
+
+        error_log('[HVAC] Schema migrated to v' . self::SCHEMA_VERSION);
     }
 
     private static function update_schema_version($version) {
@@ -548,6 +554,8 @@ class Public_Checklist {
     private static function save_submission($payload) {
         global $wpdb;
 
+        $wpdb->suppress_errors(true);
+
         $result = $wpdb->insert(
             $wpdb->prefix . 'hvac_submissions',
             [
@@ -566,6 +574,7 @@ class Public_Checklist {
 
         if (!$result) {
             error_log('HVAC Submission Error: ' . $wpdb->last_error);
+            $wpdb->suppress_errors(false);
             return false;
         }
 
@@ -614,6 +623,8 @@ class Public_Checklist {
                 );
             }
         }
+
+        $wpdb->suppress_errors(false);
 
         return $submission_id;
     }
