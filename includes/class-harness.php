@@ -347,7 +347,7 @@ class Harness extends Service_OS_CRM_Harness {
             'collapse_icon' => 'info',
             'columns' => ['Property', 'Date', 'Work Order', 'Contract', 'Technician', 'Visit Type', 'Submitted'],
             'rows' => [[
-                $submission['ji_property'] ?: '—',
+                $submission['ji_property'] ?: $submission['property_address'] ?: '—',
                 $submission['ji_date'] ?: '—',
                 $submission['ji_wo'] ?: '—',
                 $submission['ji_contract'] ?: '—',
