@@ -342,6 +342,9 @@ class Harness extends Service_OS_CRM_Harness {
         $data['sections'][] = [
             'type' => 'info_table',
             'label' => 'Job Info',
+            'collapsible' => true,
+            'collapse_key' => 'hvac-job-info',
+            'collapse_icon' => 'info',
             'columns' => ['Property', 'Date', 'Work Order', 'Contract', 'Technician', 'Visit Type', 'Submitted'],
             'rows' => [[
                 $submission['ji_property'] ?: '—',
@@ -359,6 +362,10 @@ class Harness extends Service_OS_CRM_Harness {
             $data['sections'][] = [
                 'type' => 'unit_overview',
                 'label' => 'Equipment Overview',
+                'collapsible' => true,
+                'collapse_key' => 'hvac-overview',
+                'collapse_icon' => 'grid_view',
+                'collapse_badge' => '<span class="crm-unit-badge">' . count($units_overview) . ' units</span>',
                 'units' => $units_overview,
             ];
 
@@ -366,6 +373,10 @@ class Harness extends Service_OS_CRM_Harness {
             $data['sections'][] = [
                 'type' => 'expandable_units',
                 'label' => 'Equipment Details',
+                'collapsible' => true,
+                'collapse_key' => 'hvac-details',
+                'collapse_icon' => 'list_alt',
+                'collapse_badge' => '<span class="crm-unit-badge">' . count($units_detail) . ' units</span>',
                 'units' => $units_detail,
             ];
         }
@@ -394,6 +405,10 @@ class Harness extends Service_OS_CRM_Harness {
             $data['sections'][] = [
                 'type' => 'signoffs',
                 'label' => 'Sign-offs',
+                'collapsible' => true,
+                'collapse_key' => 'hvac-signoffs',
+                'collapse_icon' => 'check_circle',
+                'collapse_badge' => '<span class="crm-unit-badge">' . count($signoff_items) . '</span>',
                 'items' => $signoff_items,
             ];
         }
