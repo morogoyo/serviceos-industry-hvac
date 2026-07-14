@@ -558,15 +558,23 @@ class Public_Checklist {
         $existing_cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
 
         $all_fields = [
-            'ji_contract'   => sanitize_text_field($payload['ji_contract'] ?? ''),
-            'ji_wo'         => sanitize_text_field($payload['ji_wo'] ?? ''),
-            'ji_property'   => sanitize_text_field($payload['ji_property'] ?? ''),
-            'ji_date'       => sanitize_text_field($payload['ji_date'] ?? ''),
-            'ji_tech'       => sanitize_text_field($payload['ji_tech'] ?? ''),
-            'ji_visit'      => sanitize_text_field($payload['ji_visit'] ?? ''),
-            'technician_id' => absint($payload['technician_id'] ?? 0),
-            'client_id'     => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
-            'created_at'    => current_time('mysql'),
+            'ji_contract'       => sanitize_text_field($payload['ji_contract'] ?? ''),
+            'ji_wo'             => sanitize_text_field($payload['ji_wo'] ?? ''),
+            'ji_property'       => sanitize_text_field($payload['ji_property'] ?? ''),
+            'ji_date'           => sanitize_text_field($payload['ji_date'] ?? ''),
+            'ji_tech'           => sanitize_text_field($payload['ji_tech'] ?? ''),
+            'ji_visit'          => sanitize_text_field($payload['ji_visit'] ?? ''),
+            'technician_id'     => absint($payload['technician_id'] ?? 0),
+            'client_id'         => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
+            'created_at'        => current_time('mysql'),
+            'uuid'              => wp_generate_uuid4(),
+            'property_address'  => sanitize_text_field($payload['ji_property'] ?? ''),
+            'date_of_service'   => sanitize_text_field($payload['ji_date'] ?? ''),
+            'technician_name'   => sanitize_text_field($payload['ji_tech'] ?? ''),
+            'work_order'        => sanitize_text_field($payload['ji_wo'] ?? ''),
+            'contract_number'   => sanitize_text_field($payload['ji_contract'] ?? ''),
+            'visit_type'        => sanitize_text_field($payload['ji_visit'] ?? ''),
+            'raw_json'          => json_encode($payload),
         ];
 
         $data = [];
@@ -598,6 +606,8 @@ class Public_Checklist {
                 $all_unit_fields = [
                     'submission_id'   => $submission_id,
                     'unit_number'     => intval($unit['unit_number'] ?? 0),
+                    'item_index'      => 0,
+                    'checked'         => 0,
                     'equipment_type'  => sanitize_text_field($unit['equipment_type'] ?? ''),
                     'serial_number'   => sanitize_text_field($unit['serial_number'] ?? ''),
                     'model_number'    => sanitize_text_field($unit['model_number'] ?? ''),
@@ -608,6 +618,10 @@ class Public_Checklist {
                     'ret'             => sanitize_text_field($unit['ret'] ?? ''),
                     'dt'              => sanitize_text_field($unit['dt'] ?? ''),
                     'fs'              => sanitize_text_field($unit['fs'] ?? ''),
+                    'supply_temp'     => sanitize_text_field($unit['sup'] ?? ''),
+                    'return_temp'     => sanitize_text_field($unit['ret'] ?? ''),
+                    'delta_t'         => sanitize_text_field($unit['dt'] ?? ''),
+                    'filter_size'     => sanitize_text_field($unit['fs'] ?? ''),
                     'notes'           => sanitize_textarea_field($unit['notes'] ?? ''),
                     'init'            => sanitize_text_field($unit['init'] ?? ''),
                     'status'          => sanitize_text_field($unit['status'] ?? ''),
@@ -618,7 +632,7 @@ class Public_Checklist {
                 foreach ($all_unit_fields as $col => $val) {
                     if (in_array($col, $items_cols, true)) {
                         $u_data[$col] = $val;
-                        $u_formats[] = (in_array($col, ['submission_id', 'unit_number'])) ? '%d' : '%s';
+                        $u_formats[] = (in_array($col, ['submission_id', 'unit_number', 'item_index', 'checked'])) ? '%d' : '%s';
                     }
                 }
 
@@ -627,18 +641,30 @@ class Public_Checklist {
         }
 
         if (!empty($payload['signoffs'])) {
+            $signoffs_table = $wpdb->prefix . 'hvac_signoffs';
+            $signoffs_cols = $wpdb->get_col("SHOW COLUMNS FROM {$signoffs_table}");
+
             foreach ($payload['signoffs'] as $so) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'hvac_signoffs',
-                    [
-                        'submission_id'  => $submission_id,
-                        'signoff_type'   => sanitize_text_field($so['signoff_type'] ?? ''),
-                        'printed_name'   => sanitize_text_field($so['printed_name'] ?? ''),
-                        'signature_data' => sanitize_textarea_field($so['signature_data'] ?? ''),
-                        'signed_at'      => sanitize_text_field($so['signed_at'] ?? current_time('mysql')),
-                    ],
-                    ['%d', '%s', '%s', '%s', '%s']
-                );
+                $all_so_fields = [
+                    'submission_id'  => $submission_id,
+                    'item_label'     => sanitize_text_field($so['label'] ?? $so['printed_name'] ?? ''),
+                    'checked'        => ($so['checked'] ?? false) ? 1 : 0,
+                    'signoff_type'   => sanitize_text_field($so['signoff_type'] ?? ''),
+                    'printed_name'   => sanitize_text_field($so['printed_name'] ?? ''),
+                    'signature_data' => sanitize_textarea_field($so['signature_data'] ?? ''),
+                    'signed_at'      => sanitize_text_field($so['signed_at'] ?? current_time('mysql')),
+                ];
+
+                $s_data = [];
+                $s_formats = [];
+                foreach ($all_so_fields as $col => $val) {
+                    if (in_array($col, $signoffs_cols, true)) {
+                        $s_data[$col] = $val;
+                        $s_formats[] = (in_array($col, ['submission_id', 'checked'])) ? '%d' : '%s';
+                    }
+                }
+
+                $wpdb->insert($signoffs_table, $s_data, $s_formats);
             }
         }
 
