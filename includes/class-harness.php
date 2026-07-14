@@ -345,16 +345,16 @@ class Harness extends Service_OS_CRM_Harness {
             'collapsible' => true,
             'collapse_key' => 'hvac-job-info',
             'collapse_icon' => 'info',
-            'columns' => ['Property', 'Date', 'Work Order', 'Contract', 'Technician', 'Visit Type', 'Submitted'],
-            'rows' => [[
-                $submission['ji_property'] ?: $submission['property_address'] ?: '—',
-                $submission['ji_date'] ?: '—',
-                $submission['ji_wo'] ?: '—',
-                $submission['ji_contract'] ?: '—',
-                $tech_name,
-                $submission['ji_visit'] ?: '—',
-                $submission['created_at'],
-            ]],
+            'columns' => ['Field', 'Value'],
+            'rows' => [
+                ['Property', $submission['ji_property'] ?: $submission['property_address'] ?: '—'],
+                ['Date', $submission['ji_date'] ?: '—'],
+                ['Work Order', $submission['ji_wo'] ?: '—'],
+                ['Contract', $submission['ji_contract'] ?: '—'],
+                ['Technician', $tech_name],
+                ['Visit Type', $submission['ji_visit'] ?: '—'],
+                ['Submitted', $submission['created_at']],
+            ],
         ];
 
         $units_overview = $this->group_units_new($unit_items);

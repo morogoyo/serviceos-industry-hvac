@@ -254,6 +254,8 @@ Submitted via `$data['sections'][] = [...]`. Available types:
 | `data_table` | `label, cols[], rows[][]` | Generic data table |
 | `html` | `content` | Raw HTML injected into page |
 
+**Rule: All sections on detail/submission-detail pages MUST be collapsible.** Every section card must follow the same collapsible pattern (icon, label, badge, `expand_less` arrow with localStorage persistence). This provides a consistent UX where users can collapse any section to reduce scrolling on data-heavy pages. The `info_table`, `unit_overview`, `expandable_units`, `signoffs`, and `data_table` section types all support the collapsible wrapper — flag them with `collapsible => true` and provide a unique `collapse_key`.
+
 **Collapsible wrapper** — any section can become collapsible by adding:
 ```php
 'collapsible'     => true,
