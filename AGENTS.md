@@ -215,3 +215,14 @@ docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW COLUMNS FROM wp_h
 3. Create PR targeting `dev` via `gh pr create`
 4. Request user permission before `gh pr merge`
 5. Only user merges `dev` → `main`
+
+### Never `git add -A` in the CRM repo
+The CRM repo root contains Docker volume mounts (themes, uploads, other plugins) owned by Docker. `git add -A` at the repo root stages thousands of unrelated files. Always `git add {specific_file_paths}` relative to the repo root.
+
+## Session Learnings — 2026-07-14 (Collapsible Cards & Display Fixes)
+
+- **Original Schema Coexistence** — the production DB merged the original QUESTIONNAIRE.md schema with our migration schema; both column sets coexist with NOT NULL constraints on old columns. Column-aware INSERTs (`SHOW COLUMNS` → dynamic fields) are the only safe write pattern.
+- **`render_info_table()` Label Bug** — the CRM renderer only output the first column's label as `<th>`; all others were bare `<td>` values. Fix renders every `<th>` label + `<td>` value pair.
+- **Collapsible Section Pattern** — use `<details class="crm-section-card crm-collapsible-section" data-collapse-key="..." open>` with `<summary class="crm-collapsible-header">` (Material icon, label, badge, `expand_less` icon). Add a single page-level `<script>` for localStorage persistence. Flag sections with `collapsible => true`.
+- **Cross-Repo Workflow** — CRM repo changes first (renderer support), HVAC repo changes depend on CRM deployment. Two separate PRs, merge CRM first then HVAC. Keep branch names consistent across repos.
+- **Docker git Permission Issues** — Docker-owned files prevent `git reset --hard`, `git checkout`, `git stash`. Use specific file paths for `git add` and rely on `gh pr merge` for server-side merges.
