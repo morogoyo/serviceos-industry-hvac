@@ -151,3 +151,67 @@ Before pushing an industry fork:
 3. Verify list and detail pages render
 4. Verify seeded categories appear in Category dropdown
 5. Verify seeded pipeline stages appear in Pipeline view
+
+## Session Learnings — 2026-07-13 (HVAC Field Checklist Fixes)
+
+### DB Schema Compatibility
+**Always verify the actual DB schema before writing queries.** The production DB may have a different schema than what the code assumes — merged old/new columns, NOT NULL constraints without defaults, or columns from a prior questionnaire schema. Before any INSERT/UPDATE, run `SHOW COLUMNS FROM {table}` and dynamically build the query to only include columns that exist.
+
+```php
+$existing_cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+foreach ($all_fields as $col => $val) {
+    if (in_array($col, $existing_cols, true)) {
+        $data[$col] = $val;
+    }
+}
+$wpdb->insert($table, $data, $formats);
+```
+
+### `rest_do_request()` Return Type Handling
+`rest_do_request()` can return three different types depending on WordPress version:
+- `WP_Error` — on route match or permission failure
+- `WP_REST_Response` — older WordPress (4.4-5.x)
+- Raw array — newer WordPress (6.x+, after `response_to_data()`)
+
+**Always check with `is_wp_error()` first**, then check `instanceof WP_REST_Response` before calling response methods:
+
+```php
+$response = rest_do_request($request);
+if (is_wp_error($response)) { /* handle error */ }
+if ($response instanceof \WP_REST_Response) {
+    $data = $response->get_data();
+} else {
+    $data = $response; // already raw array
+}
+```
+
+### `$wpdb->print_error()` Corrupts REST JSON
+`$wpdb->show_errors` defaults to `true`. When a MySQL query fails, `print_error()` echoes HTML directly to the output buffer, corrupting REST API JSON responses. **Always call `$wpdb->suppress_errors(true)` before DB operations in REST handlers** and restore with `suppress_errors(false)` after.
+
+### Migration Versioning — Single Authority
+Never set the schema version in `create_tables()` — `dbDelta` is notoriously unreliable for ALTER TABLE operations on existing installs. Let `maybe_migrate_tables()` (hooked to `plugins_loaded`) be the sole authority on schema versioning. Use idempotent `SHOW COLUMNS` checks before each ALTER TABLE.
+
+```php
+// WRONG: create_tables() sets version → migration skipped
+dbDelta($tables);
+update_option('hvac_schema_version', 2);
+
+// RIGHT: only maybe_migrate_tables() sets version
+dbDelta($tables);
+// schema version set only after successful migration
+```
+
+### Local Docker Verification
+When debugging in Docker, verify the actual DB state:
+```bash
+docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW TABLES LIKE '%hvac%';"
+docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW COLUMNS FROM wp_hvac_submissions;"
+```
+
+### PR-Only Flow to Dev
+**Never push directly to `dev`.** All work must go through:
+1. Create `fix/` or `feature/` branch off `dev`
+2. Commit and push branch
+3. Create PR targeting `dev` via `gh pr create`
+4. Request user permission before `gh pr merge`
+5. Only user merges `dev` → `main`
