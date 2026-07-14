@@ -430,8 +430,6 @@ class Public_Checklist {
         ];
 
         dbDelta($tables);
-
-        self::update_schema_version(2);
     }
 
     const SCHEMA_VERSION = 2;
@@ -556,21 +554,31 @@ class Public_Checklist {
 
         $wpdb->suppress_errors(true);
 
-        $result = $wpdb->insert(
-            $wpdb->prefix . 'hvac_submissions',
-            [
-                'ji_contract'   => sanitize_text_field($payload['ji_contract'] ?? ''),
-                'ji_wo'         => sanitize_text_field($payload['ji_wo'] ?? ''),
-                'ji_property'   => sanitize_text_field($payload['ji_property'] ?? ''),
-                'ji_date'       => sanitize_text_field($payload['ji_date'] ?? ''),
-                'ji_tech'       => sanitize_text_field($payload['ji_tech'] ?? ''),
-                'ji_visit'      => sanitize_text_field($payload['ji_visit'] ?? ''),
-                'technician_id' => absint($payload['technician_id'] ?? 0),
-                'client_id'     => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
-                'created_at'    => current_time('mysql'),
-            ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s']
-        );
+        $table = $wpdb->prefix . 'hvac_submissions';
+        $existing_cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+
+        $all_fields = [
+            'ji_contract'   => sanitize_text_field($payload['ji_contract'] ?? ''),
+            'ji_wo'         => sanitize_text_field($payload['ji_wo'] ?? ''),
+            'ji_property'   => sanitize_text_field($payload['ji_property'] ?? ''),
+            'ji_date'       => sanitize_text_field($payload['ji_date'] ?? ''),
+            'ji_tech'       => sanitize_text_field($payload['ji_tech'] ?? ''),
+            'ji_visit'      => sanitize_text_field($payload['ji_visit'] ?? ''),
+            'technician_id' => absint($payload['technician_id'] ?? 0),
+            'client_id'     => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
+            'created_at'    => current_time('mysql'),
+        ];
+
+        $data = [];
+        $formats = [];
+        foreach ($all_fields as $col => $val) {
+            if (in_array($col, $existing_cols, true)) {
+                $data[$col] = $val;
+                $formats[] = ($col === 'technician_id' || $col === 'client_id') ? '%d' : '%s';
+            }
+        }
+
+        $result = $wpdb->insert($table, $data, $formats);
 
         if (!$result) {
             error_log('HVAC Submission Error: ' . $wpdb->last_error);
@@ -583,28 +591,38 @@ class Public_Checklist {
         error_log('[HVAC] Submission #' . $submission_id . ' saved. WO: ' . ($payload['ji_wo'] ?? '') . ', Property: ' . ($payload['ji_property'] ?? ''));
 
         if (!empty($payload['units'])) {
+            $items_table = $wpdb->prefix . 'hvac_unit_items';
+            $items_cols = $wpdb->get_col("SHOW COLUMNS FROM {$items_table}");
+
             foreach ($payload['units'] as $unit) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'hvac_unit_items',
-                    [
-                        'submission_id'   => $submission_id,
-                        'unit_number'     => intval($unit['unit_number'] ?? 0),
-                        'equipment_type'  => sanitize_text_field($unit['equipment_type'] ?? ''),
-                        'serial_number'   => sanitize_text_field($unit['serial_number'] ?? ''),
-                        'model_number'    => sanitize_text_field($unit['model_number'] ?? ''),
-                        'checks_json'     => is_array($unit['checks_json'] ?? null)
-                            ? json_encode($unit['checks_json'])
-                            : sanitize_textarea_field($unit['checks_json'] ?? ''),
-                        'sup'             => sanitize_text_field($unit['sup'] ?? ''),
-                        'ret'             => sanitize_text_field($unit['ret'] ?? ''),
-                        'dt'              => sanitize_text_field($unit['dt'] ?? ''),
-                        'fs'              => sanitize_text_field($unit['fs'] ?? ''),
-                        'notes'           => sanitize_textarea_field($unit['notes'] ?? ''),
-                        'init'            => sanitize_text_field($unit['init'] ?? ''),
-                        'status'          => sanitize_text_field($unit['status'] ?? ''),
-                    ],
-                    ['%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
-                );
+                $all_unit_fields = [
+                    'submission_id'   => $submission_id,
+                    'unit_number'     => intval($unit['unit_number'] ?? 0),
+                    'equipment_type'  => sanitize_text_field($unit['equipment_type'] ?? ''),
+                    'serial_number'   => sanitize_text_field($unit['serial_number'] ?? ''),
+                    'model_number'    => sanitize_text_field($unit['model_number'] ?? ''),
+                    'checks_json'     => is_array($unit['checks_json'] ?? null)
+                        ? json_encode($unit['checks_json'])
+                        : sanitize_textarea_field($unit['checks_json'] ?? ''),
+                    'sup'             => sanitize_text_field($unit['sup'] ?? ''),
+                    'ret'             => sanitize_text_field($unit['ret'] ?? ''),
+                    'dt'              => sanitize_text_field($unit['dt'] ?? ''),
+                    'fs'              => sanitize_text_field($unit['fs'] ?? ''),
+                    'notes'           => sanitize_textarea_field($unit['notes'] ?? ''),
+                    'init'            => sanitize_text_field($unit['init'] ?? ''),
+                    'status'          => sanitize_text_field($unit['status'] ?? ''),
+                ];
+
+                $u_data = [];
+                $u_formats = [];
+                foreach ($all_unit_fields as $col => $val) {
+                    if (in_array($col, $items_cols, true)) {
+                        $u_data[$col] = $val;
+                        $u_formats[] = (in_array($col, ['submission_id', 'unit_number'])) ? '%d' : '%s';
+                    }
+                }
+
+                $wpdb->insert($items_table, $u_data, $u_formats);
             }
         }
 
