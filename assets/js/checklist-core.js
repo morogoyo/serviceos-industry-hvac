@@ -59,13 +59,6 @@ HVACChecklist.init = function(wid, items, unitCount, allowAdd, maxUnits, clientS
   if (clientSource === 'search_dropdown') {
     this._loadClients();
   }
-
-  // Check for ?client_id= in URL
-  if (clientSource === 'url_param') {
-    var params = new URLSearchParams(window.location.search);
-    var cid = params.get('client_id');
-    if (cid) this._fetchAndFillClient(parseInt(cid));
-  }
 };
 
 // ── BUILD UNITS HTML ───────────────────────────────────────────────────────
@@ -263,46 +256,45 @@ HVACChecklist._loadClients = function() {
   var dd = document.getElementById('hvac_client_dd_' + wid);
   if (!input || !dd) return;
 
-  fetch('/wp-json/crm/v1/clients?per_page=100')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var list = Array.isArray(data) ? data : (data.data || []);
-      self._clientList = list;
+  var debounce = null;
 
-      input.addEventListener('input', function() {
-        var q = input.value.toLowerCase().trim();
-        dd.innerHTML = '';
-        if (q.length < 2) { dd.classList.remove('hvac-client-dropdown-open'); return; }
-        var matches = list.filter(function(c) {
-          var name = ((c.data || c).first_name + ' ' + (c.data || c).last_name).toLowerCase();
-          var email = ((c.data || c).email || '').toLowerCase();
-          var company = ((c.data || c).company || '').toLowerCase();
-          return name.indexOf(q) !== -1 || email.indexOf(q) !== -1 || company.indexOf(q) !== -1;
-        }).slice(0, 8);
+  input.addEventListener('input', function() {
+    var q = input.value.trim();
+    if (q.length < 2) { dd.innerHTML = ''; dd.classList.remove('hvac-client-dropdown-open'); return; }
 
-        if (matches.length === 0) {
+    clearTimeout(debounce);
+    debounce = setTimeout(function() {
+      fetch('/wp-json/crm/v1/hvac/client-search?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var list = Array.isArray(data) ? data : [];
+          dd.innerHTML = '';
+
+          if (list.length === 0) {
+            dd.classList.add('hvac-client-dropdown-open');
+            dd.innerHTML = '<div class="hvac-client-dd-item hvac-client-dd-empty">No clients found</div>';
+            return;
+          }
+
+          list.forEach(function(c) {
+            var name = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
+            var item = document.createElement('div');
+            item.className = 'hvac-client-dd-item';
+            item.textContent = name + (c.company ? ' \u2014 ' + c.company : '') + (c.email ? ' (' + c.email + ')' : '');
+            item.addEventListener('click', function() { self._selectClient(c); });
+            dd.appendChild(item);
+          });
           dd.classList.add('hvac-client-dropdown-open');
-          dd.innerHTML = '<div class="hvac-client-dd-item hvac-client-dd-empty">No clients found</div>';
-          return;
-        }
-
-        dd.innerHTML = '';
-        matches.forEach(function(raw) {
-          var c = raw.data || raw;
-          var name = (c.first_name + ' ' + c.last_name).trim();
-          var item = document.createElement('div');
-          item.className = 'hvac-client-dd-item';
-          item.textContent = name + (c.company ? ' — ' + c.company : '') + (c.email ? ' (' + c.email + ')' : '');
-          item.addEventListener('click', function() { self._selectClient(c); });
-          dd.appendChild(item);
+        })
+        .catch(function(err) {
+          console.error('HVAC client search error:', err);
         });
-        dd.classList.add('hvac-client-dropdown-open');
-      });
+    }, 250);
+  });
 
-      input.addEventListener('blur', function() {
-        setTimeout(function() { dd.classList.remove('hvac-client-dropdown-open'); }, 200);
-      });
-    });
+  input.addEventListener('blur', function() {
+    setTimeout(function() { dd.classList.remove('hvac-client-dropdown-open'); }, 200);
+  });
 };
 
 HVACChecklist._selectClient = function(client) {
@@ -318,16 +310,6 @@ HVACChecklist._selectClient = function(client) {
   if (propEl && !propEl.value && client.address) propEl.value = client.address;
   if (contractEl && !contractEl.value) contractEl.value = '';
   this._selectedClientId = client.id;
-};
-
-HVACChecklist._fetchAndFillClient = function(clientId) {
-  var self = this;
-  fetch('/wp-json/crm/v1/clients/' + clientId)
-    .then(function(r) { return r.json(); })
-    .then(function(raw) {
-      var c = raw.data || raw;
-      self._selectClient(c);
-    });
 };
 
 // ── SCOPE TOGGLE ──────────────────────────────────────────────────────────

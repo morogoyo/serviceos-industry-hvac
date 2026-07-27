@@ -32,6 +32,12 @@ class Public_Checklist {
             'callback' => [__CLASS__, 'handle_get_submission_detail'],
             'permission_callback' => '__return_true',
         ]);
+
+        register_rest_route('crm/v1', '/hvac/client-search', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_client_search'],
+            'permission_callback' => '__return_true',
+        ]);
     }
 
     public static function render_checklist($atts) {
@@ -97,6 +103,31 @@ class Public_Checklist {
         $wo_readonly = $wo_value && !$atts['allow_wo_override'] ? ' readonly' : '';
         $assignment_lock = (bool) $atts['enforce_assignment_lock'];
         $tech_readonly = $assignment_lock ? ' readonly' : '';
+
+        $current_user = wp_get_current_user();
+        $tech_name = '';
+        if ($current_user && $current_user->exists()) {
+            $tech_name = $current_user->display_name;
+            $tech_readonly = ' readonly';
+        }
+
+        $prefill_client_name = '';
+        $prefill_property = '';
+        $prefill_contract = '';
+        if ($client_source === 'url_param' && !empty($_GET['client_id'])) {
+            global $wpdb;
+            $cid = absint($_GET['client_id']);
+            $clients_table = $wpdb->prefix . 'crm_clients';
+            if ($wpdb->get_var("SHOW TABLES LIKE '{$clients_table}'") === $clients_table) {
+                $client = $wpdb->get_row($wpdb->prepare(
+                    "SELECT first_name, last_name, address, company FROM {$clients_table} WHERE id = %d", $cid
+                ));
+                if ($client) {
+                    $prefill_client_name = trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''));
+                    $prefill_property = $client->address ?? '';
+                }
+            }
+        }
 
         $wid = 'hvac_' . uniqid();
         $storage_key = 'hvac_checklist_v2';
@@ -164,9 +195,9 @@ class Public_Checklist {
     </div>
     <?php endif; ?>
     <div class="hvac-job-grid">
-      <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address"></div>
+      <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address" value="<?php echo esc_attr($prefill_property); ?>"></div>
       <div class="hvac-job-field"><label>Date of Service</label><input type="date" id="hvac_ji_date_<?php echo esc_attr($wid); ?>"></div>
-      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name"<?php echo $tech_readonly; ?>></div>
+      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name" value="<?php echo esc_attr($tech_name); ?>"<?php echo $tech_readonly; ?>></div>
       <div class="hvac-job-field"><label>Work Order #</label><input type="text" id="hvac_ji_wo_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($wo_value); ?>"<?php echo $wo_readonly; ?>></div>
       <div class="hvac-job-field"><label>Contract #</label><input type="text" id="hvac_ji_contract_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($contract_value); ?>"></div>
       <div class="hvac-job-field"><label>Visit Type</label>
@@ -377,6 +408,34 @@ class Public_Checklist {
         ));
 
         return rest_ensure_response($submission);
+    }
+
+    public static function handle_client_search($request) {
+        global $wpdb;
+        $q = sanitize_text_field($request->get_param('q') ?? '');
+        $business_id = (int) get_option('service_os_crm_business_id', 0);
+
+        $clients_table = $wpdb->prefix . 'crm_clients';
+        if ($wpdb->get_var("SHOW TABLES LIKE '{$clients_table}'") !== $clients_table) {
+            return rest_ensure_response([]);
+        }
+
+        if (empty($q) || strlen($q) < 2) {
+            return rest_ensure_response([]);
+        }
+
+        $like = '%' . $wpdb->esc_like($q) . '%';
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, first_name, last_name, email, company, address
+             FROM {$clients_table}
+             WHERE business_id = %d
+               AND (first_name LIKE %s OR last_name LIKE %s OR email LIKE %s OR company LIKE %s)
+             ORDER BY last_name, first_name
+             LIMIT 10",
+            $business_id, $like, $like, $like, $like
+        ));
+
+        return rest_ensure_response($results);
     }
 
     private static function register_equipment_and_create_deal($payload, $submission_id) {
