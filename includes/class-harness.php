@@ -104,7 +104,12 @@ class Harness extends Service_OS_CRM_Harness {
         $data['toolbar'] = [
             ['type' => 'action', 'label' => 'New Service', 'onclick' => 'window.ServiceOSHVAC.openNewServiceModal()'],
         ];
+        $submissions_url = admin_url('admin.php?page=service-os-crm-module-hvac-sub-submissions');
         $data['sections'] = [
+            [
+                'type' => 'html',
+                'content' => '<a href="' . esc_url($submissions_url) . '" class="crm-btn crm-btn-secondary" style="margin-bottom:16px;">View ' . $submission_count . ' Field Checklists</a>',
+            ],
             [
                 'type' => 'data_table',
                 'label' => 'HVAC Services',
