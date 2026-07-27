@@ -265,3 +265,42 @@ The URL can be changed in CRM Settings → "Field Checklist Form" card. Saved vi
 
 ### data_table Section Limitation
 The `render_data_table()` function in `page-renderer.php:429` wraps every cell in `esc_html()` — HTML links inside `data_table` rows are stripped. Always use raw `html` section type when clickable links are needed in tables.
+
+## Session Learnings — 2026-07-26 (Dynamic Elementor Checklist)
+
+### Elementor Repeater for Configurable Items
+Use `Elementor\Controls_Manager::REPEATER` for checklist task items. Pass items as JSON string through shortcode atts → PHP `render_checklist()` → `data-items` attribute → JS init. This eliminates the hardcoded `HVACChecklist.ITEMS` array in JS. Single source of truth in the widget settings.
+
+### Public REST Endpoints for Client Search
+CRM REST endpoints require `is_user_logged_in()` permission. For public-facing checklist forms accessed by non-logged-in technicians, create HVAC-specific public routes with `'permission_callback' => '__return_true'`. Query `crm_clients` table directly with `$wpdb->prepare()` using `$wpdb->esc_like()` for LIKE queries.
+
+```php
+register_rest_route('crm/v1', '/hvac/client-search', [
+    'methods' => 'GET',
+    'callback' => [__CLASS__, 'handle_client_search'],
+    'permission_callback' => '__return_true',
+]);
+```
+
+### Technician Auto-Fill from WP User
+Use `wp_get_current_user()->display_name` server-side to pre-fill the technician name field. Set `readonly` when a user is logged in. No REST call needed — rendered at shortcode evaluation time.
+
+```php
+$current_user = wp_get_current_user();
+if ($current_user && $current_user->exists()) {
+    $tech_name = $current_user->display_name;
+    $tech_readonly = ' readonly';
+}
+```
+
+### Shortcode Attribute Defaults
+The shortcode `shortcode_atts` defaults are the fallback for direct `[hvac_checklist]` usage. Widget `render()` overrides them via generated shortcode string. Always check both layers when defaults change — the widget's `get_settings_for_display()` may return `null` for controls not yet saved on existing widget instances.
+
+### Client Search Condition
+Use `$client_source !== 'none'` as the visibility condition, not `=== 'search_dropdown'`. This allows the search input to appear for `url_param` mode too (technician can override the URL-specified client).
+
+### Repeater Item Passing via Shortcode
+When passing repeater data through shortcode attrs, use `$items_json` → `esc_attr()` → embedded in shortcode string → `json_decode($atts['items'], true)` in the handler. Provide a fallback default array if JSON decoding fails or returns empty.
+
+### Debounced Client Search
+Use `setTimeout` with 250ms debounce on the search input. Fetch from `/wp-json/crm/v1/hvac/client-search?q=...` (public endpoint) rather than loading all clients upfront and filtering client-side. This avoids 403 errors on public pages.

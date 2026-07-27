@@ -46,7 +46,7 @@ class Public_Checklist {
             'max_units'               => '10',
             'allow_unit_add_remove'   => '0',
             'items'                   => '[]',
-            'client_source'           => 'none',
+            'client_source'           => 'search_dropdown',
             'ji_wo'                   => '',
             'ji_contract'             => '',
             'allow_wo_override'       => '1',
@@ -184,7 +184,7 @@ class Public_Checklist {
 
   <div class="hvac-card">
     <div class="hvac-section-label">▸ Job Information</div>
-    <?php if ($client_source === 'search_dropdown'): ?>
+    <?php if ($client_source !== 'none'): ?>
     <div class="hvac-client-search" id="hvac_client_search_<?php echo esc_attr($wid); ?>">
       <label>Search Client</label>
       <div class="hvac-client-search-row">
