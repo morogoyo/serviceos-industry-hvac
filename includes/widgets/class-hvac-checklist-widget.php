@@ -3,6 +3,7 @@ namespace ServiceOS_Industry_Plugin\Widgets;
 
 use Elementor\Widget_Base;
 use Elementor\Controls_Manager;
+use Elementor\Repeater;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -64,6 +65,17 @@ class HVAC_Checklist_Widget extends Widget_Base {
             'placeholder' => __('Optional — auto-fills Contract field', 'serviceos-industry-hvac'),
         ]);
 
+        $this->add_control('client_source', [
+            'label'   => __('Client Source', 'serviceos-industry-hvac'),
+            'type'    => Controls_Manager::SELECT,
+            'default' => 'search_dropdown',
+            'options' => [
+                'none'            => __('None (no client lookup)', 'serviceos-industry-hvac'),
+                'url_param'       => __('URL Parameter (?client_id=)', 'serviceos-industry-hvac'),
+                'search_dropdown' => __('Search Dropdown (tech selects client)', 'serviceos-industry-hvac'),
+            ],
+        ]);
+
         $this->end_controls_section();
 
         $this->start_controls_section('section_equipment', [
@@ -100,29 +112,85 @@ class HVAC_Checklist_Widget extends Widget_Base {
 
         $this->end_controls_section();
 
-        $this->start_controls_section('content_section', [
-            'label' => __('Checklist Settings', 'serviceos-industry-hvac'),
+        $this->start_controls_section('section_units', [
+            'label' => __('Unit Configuration', 'serviceos-industry-hvac'),
             'tab'   => Controls_Manager::TAB_CONTENT,
         ]);
 
         $this->add_control('unit_count', [
-            'label'   => __('Number of Units', 'serviceos-industry-hvac'),
-            'type'    => Controls_Manager::SELECT,
-            'default' => '10',
-            'options' => [
-                '10' => __('10 Units', 'serviceos-industry-hvac'),
-                '52' => __('52 Units', 'serviceos-industry-hvac'),
-            ],
+            'label'   => __('Default Units', 'serviceos-industry-hvac'),
+            'type'    => Controls_Manager::NUMBER,
+            'default' => 10,
+            'min'     => 1,
+            'max'     => 99,
+            'step'    => 1,
         ]);
 
-        $this->add_control('allow_wo_override', [
-            'label'        => __('Allow Work Order Override', 'serviceos-industry-hvac'),
-            'description'  => __('When off, the WO field is locked if pre-populated via URL or shortcode.', 'serviceos-industry-hvac'),
+        $this->add_control('allow_unit_add_remove', [
+            'label'        => __('Allow Add/Remove Units', 'serviceos-industry-hvac'),
+            'description'  => __('Let technicians add or remove equipment unit sections in the field.', 'serviceos-industry-hvac'),
             'type'         => Controls_Manager::SWITCHER,
             'label_on'     => __('Yes', 'serviceos-industry-hvac'),
             'label_off'    => __('No', 'serviceos-industry-hvac'),
             'return_value' => '1',
-            'default'      => '1',
+            'default'      => '',
+        ]);
+
+        $this->add_control('max_units', [
+            'label'     => __('Max Units', 'serviceos-industry-hvac'),
+            'type'      => Controls_Manager::NUMBER,
+            'default'   => 99,
+            'min'       => 1,
+            'max'       => 99,
+            'step'      => 1,
+            'condition' => [
+                'allow_unit_add_remove' => '1',
+            ],
+        ]);
+
+        $this->end_controls_section();
+
+        $repeater = new Repeater();
+
+        $repeater->add_control('item_label', [
+            'label'       => __('Task Label', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::TEXT,
+            'default'     => __('New checklist item', 'serviceos-industry-hvac'),
+            'label_block' => true,
+        ]);
+
+        $repeater->add_control('item_default', [
+            'label'        => __('Checked by Default', 'serviceos-industry-hvac'),
+            'type'         => Controls_Manager::SWITCHER,
+            'label_on'     => __('Yes', 'serviceos-industry-hvac'),
+            'label_off'    => __('No', 'serviceos-industry-hvac'),
+            'return_value' => '1',
+            'default'      => '',
+        ]);
+
+        $this->start_controls_section('section_checklist_items', [
+            'label' => __('Checklist Items', 'serviceos-industry-hvac'),
+            'tab'   => Controls_Manager::TAB_CONTENT,
+        ]);
+
+        $this->add_control('checklist_items', [
+            'label'       => __('Tasks per Unit', 'serviceos-industry-hvac'),
+            'type'        => Controls_Manager::REPEATER,
+            'fields'      => $repeater->get_controls(),
+            'default'     => [
+                ['item_label' => __('Evaporator coil — light inspect & surface clean', 'serviceos-industry-hvac')],
+                ['item_label' => __('Flush and treat condensate drain lines', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect control systems and safety devices', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check contactors and electrical components', 'serviceos-industry-hvac')],
+                ['item_label' => __('Replace all air filters (included)', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect condenser fan blades and motors', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check refrigerant levels and system condition', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect for visible leaks / abnormal condensation', 'serviceos-industry-hvac')],
+                ['item_label' => __('Evaluate overall system performance', 'serviceos-industry-hvac')],
+                ['item_label' => __('Service report provided after visit', 'serviceos-industry-hvac')],
+            ],
+            'title_field' => '{{{ item_label }}}',
+            'prevent_empty' => true,
         ]);
 
         $this->end_controls_section();
@@ -150,10 +218,8 @@ class HVAC_Checklist_Widget extends Widget_Base {
     protected function render() {
         $settings = $this->get_settings_for_display();
 
-        $unit_count = $settings['unit_count'] ?? '10';
-        if (!in_array($unit_count, ['10', '52'])) {
-            $unit_count = '10';
-        }
+        $unit_count = absint($settings['unit_count'] ?? 10);
+        $unit_count = max(1, min(99, $unit_count));
 
         $wo_id = '';
         if ('fixed_wo' === $settings['operational_mode']) {
@@ -165,16 +231,40 @@ class HVAC_Checklist_Widget extends Widget_Base {
         $auto_track = $settings['auto_provision_assets'] ?? '1';
         $technician_lock = $settings['enforce_technician_lock'] ?? '';
 
+        $items = $settings['checklist_items'] ?? [];
+        if (empty($items)) {
+            $items = [
+                ['item_label' => __('Evaporator coil — light inspect & surface clean', 'serviceos-industry-hvac')],
+                ['item_label' => __('Flush and treat condensate drain lines', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect control systems and safety devices', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check contactors and electrical components', 'serviceos-industry-hvac')],
+                ['item_label' => __('Replace all air filters (included)', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect condenser fan blades and motors', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check refrigerant levels and system condition', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect for visible leaks / abnormal condensation', 'serviceos-industry-hvac')],
+                ['item_label' => __('Evaluate overall system performance', 'serviceos-industry-hvac')],
+                ['item_label' => __('Service report provided after visit', 'serviceos-industry-hvac')],
+            ];
+        }
+        $items_json = json_encode($items);
+
+        $max_units = absint($settings['max_units'] ?? $unit_count);
+        $allow_add = $settings['allow_unit_add_remove'] === '1';
+
         $atts = [
-            'units'                  => $unit_count,
-            'ji_wo'                  => $wo_id,
-            'ji_contract'            => $settings['ji_contract'] ?? '',
-            'allow_wo_override'      => $settings['allow_wo_override'] ?? '1',
-            'enforce_assignment_lock'=> $technician_lock,
-            'auto_track'             => $auto_track,
-            'technician_lock'        => $technician_lock,
-            'navy_color'             => $settings['navy_color'] ?? '#001C32',
-            'orange_color'           => $settings['orange_color'] ?? '#E07820',
+            'units'                     => $unit_count,
+            'max_units'                 => $max_units,
+            'allow_unit_add_remove'     => $allow_add ? '1' : '0',
+            'items'                     => $items_json,
+            'client_source'             => $settings['client_source'] ?? 'search_dropdown',
+            'ji_wo'                     => $wo_id,
+            'ji_contract'               => $settings['ji_contract'] ?? '',
+            'allow_wo_override'         => $settings['allow_wo_override'] ?? '1',
+            'enforce_assignment_lock'   => $technician_lock,
+            'auto_track'                => $auto_track,
+            'technician_lock'           => $technician_lock,
+            'navy_color'                => $settings['navy_color'] ?? '#001C32',
+            'orange_color'              => $settings['orange_color'] ?? '#E07820',
         ];
 
         $shortcode_str = '[hvac_checklist';
@@ -195,7 +285,7 @@ class HVAC_Checklist_Widget extends Widget_Base {
         <div style="padding:20px;background:var(--e-a-bg-default);border:1px dashed var(--e-a-border-color-bold);border-radius:8px;text-align:center;color:var(--e-a-color-txt);">
             <span class="eicon-checkbox" style="font-size:32px;display:block;margin-bottom:8px;"></span>
             <strong><?php esc_html_e('HVAC Field Checklist', 'serviceos-industry-hvac'); ?></strong>
-            <p style="margin:4px 0 0;font-size:12px;"><?php esc_html_e('Unit count: ', 'serviceos-industry-hvac'); ?>{{{ settings.unit_count }}}</p>
+            <p style="margin:4px 0 0;font-size:12px;"><?php esc_html_e('Units: ', 'serviceos-industry-hvac'); ?>{{{ settings.unit_count }}}</p>
             <p style="margin:2px 0 0;font-size:11px;opacity:0.6;"><?php esc_html_e('Interactive form renders on the frontend', 'serviceos-industry-hvac'); ?></p>
         </div>
         <?php
@@ -219,21 +309,12 @@ class HVAC_Checklist_Widget extends Widget_Base {
             true
         );
 
-        $ten_file = SERVICEOS_IP_PATH . 'assets/js/checklist-10.js';
+        $init_file = SERVICEOS_IP_PATH . 'assets/js/checklist-init.js';
         wp_enqueue_script(
-            'hvac-checklist-10',
-            SERVICEOS_IP_URL . 'assets/js/checklist-10.js',
+            'hvac-checklist-init',
+            SERVICEOS_IP_URL . 'assets/js/checklist-init.js',
             ['hvac-checklist-core'],
-            file_exists($ten_file) ? filemtime($ten_file) : SERVICEOS_IP_VERSION,
-            true
-        );
-
-        $ft_file = SERVICEOS_IP_PATH . 'assets/js/checklist-52.js';
-        wp_enqueue_script(
-            'hvac-checklist-52',
-            SERVICEOS_IP_URL . 'assets/js/checklist-52.js',
-            ['hvac-checklist-core'],
-            file_exists($ft_file) ? filemtime($ft_file) : SERVICEOS_IP_VERSION,
+            file_exists($init_file) ? filemtime($init_file) : SERVICEOS_IP_VERSION,
             true
         );
     }

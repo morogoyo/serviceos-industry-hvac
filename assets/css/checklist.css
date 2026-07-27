@@ -681,3 +681,109 @@
 
 .hvac-btn-submit:hover { background: #0D2D47; }
 .hvac-btn-submit:disabled { background: #10B981; border-color: #10B981 !important; cursor: default; }
+
+/* ── CLIENT SEARCH DROPDOWN ─────────────────────────────────────────────────  */
+.hvac-client-search { margin-bottom: 12px; }
+.hvac-client-search > label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+  display: block;
+  margin-bottom: 4px;
+}
+.hvac-client-search-row { position: relative; }
+.hvac-client-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  background: var(--white);
+  box-sizing: border-box;
+  min-height: 44px;
+}
+.hvac-client-input:focus { border-color: var(--orange); outline: none; }
+.hvac-client-selected {
+  background: #f0fff4;
+  border-color: var(--green);
+}
+
+.hvac-client-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--white);
+  border: 1px solid var(--gray-300);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+.hvac-client-dropdown-open { display: block; }
+
+.hvac-client-dd-item {
+  padding: 10px 14px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.hvac-client-dd-item:last-child { border-bottom: none; }
+.hvac-client-dd-item:hover { background: var(--gray-50); color: var(--navy); }
+.hvac-client-dd-empty {
+  color: var(--gray-400);
+  cursor: default;
+  font-style: italic;
+}
+.hvac-client-dd-empty:hover { background: transparent; color: var(--gray-400); }
+
+/* ── ADD / REMOVE UNIT BUTTONS ──────────────────────────────────────────────  */
+.hvac-btn-add-unit {
+  background: var(--orange);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 0.2s;
+}
+.hvac-btn-add-unit:hover { opacity: 0.9; }
+
+.hvac-btn-remove-unit {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red-lt);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.2s, color 0.2s;
+  min-height: 44px;
+}
+.hvac-btn-remove-unit:hover { background: var(--red-lt); color: var(--red); }
