@@ -682,9 +682,9 @@
 .hvac-btn-submit:hover { background: #0D2D47; }
 .hvac-btn-submit:disabled { background: #10B981; border-color: #10B981 !important; cursor: default; }
 
-/* ── CLIENT SEARCH DROPDOWN ─────────────────────────────────────────────────  */
-.hvac-client-search { margin-bottom: 12px; }
-.hvac-client-search > label {
+/* ── CLIENT SELECT DROPDOWN ────────────────────────────────────────────────  */
+.hvac-client-select { margin-bottom: 12px; }
+.hvac-client-select > label {
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 12px;
   font-weight: 600;
@@ -694,8 +694,7 @@
   display: block;
   margin-bottom: 4px;
 }
-.hvac-client-search-row { position: relative; }
-.hvac-client-input {
+.hvac-client-select select {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--gray-300);
@@ -703,50 +702,21 @@
   font-family: 'Barlow', sans-serif;
   font-size: 14px;
   background: var(--white);
+  color: var(--navy);
+  min-height: 44px;
   box-sizing: border-box;
-  min-height: 44px;
-}
-.hvac-client-input:focus { border-color: var(--orange); outline: none; }
-.hvac-client-selected {
-  background: #f0fff4;
-  border-color: var(--green);
-}
-
-.hvac-client-dropdown {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--white);
-  border: 1px solid var(--gray-300);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  max-height: 240px;
-  overflow-y: auto;
-  z-index: 100;
-  box-shadow: var(--shadow);
-}
-.hvac-client-dropdown-open { display: block; }
-
-.hvac-client-dd-item {
-  padding: 10px 14px;
-  font-family: 'Barlow', sans-serif;
-  font-size: 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
   cursor: pointer;
-  border-bottom: 1px solid var(--gray-100);
-  min-height: 44px;
-  display: flex;
-  align-items: center;
 }
-.hvac-client-dd-item:last-child { border-bottom: none; }
-.hvac-client-dd-item:hover { background: var(--gray-50); color: var(--navy); }
-.hvac-client-dd-empty {
-  color: var(--gray-400);
-  cursor: default;
-  font-style: italic;
+.hvac-client-select select:focus {
+  border-color: var(--orange);
+  outline: none;
 }
-.hvac-client-dd-empty:hover { background: transparent; color: var(--gray-400); }
 
 /* ── ADD / REMOVE UNIT BUTTONS ──────────────────────────────────────────────  */
 .hvac-btn-add-unit {

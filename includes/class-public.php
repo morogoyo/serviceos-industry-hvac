@@ -185,17 +185,13 @@ class Public_Checklist {
   <div class="hvac-card">
     <div class="hvac-section-label">▸ Job Information</div>
     <?php if ($client_source !== 'none'): ?>
-    <div class="hvac-client-search" id="hvac_client_search_<?php echo esc_attr($wid); ?>">
-      <label>Search Client</label>
-      <div class="hvac-client-search-row">
-        <input type="text" class="hvac-client-input" id="hvac_client_input_<?php echo esc_attr($wid); ?>"
-               placeholder="Type client name to find...">
-        <div class="hvac-client-dropdown" id="hvac_client_dd_<?php echo esc_attr($wid); ?>"></div>
-      </div>
+    <div class="hvac-client-select">
+      <label>Client</label>
+      <select id="hvac_client_select_<?php echo esc_attr($wid); ?>" 
+              onchange="HVACChecklist._onClientSelect('<?php echo esc_attr($wid); ?>')">
+        <option value="">— Select Client —</option>
+      </select>
     </div>
-    <?php endif; ?>
-    <?php if ($client_source !== 'none'): ?>
-    <div class="hvac-job-field"><label>Client Name</label><input type="text" id="hvac_ji_client_name_<?php echo esc_attr($wid); ?>" readonly placeholder="—" value="<?php echo esc_attr($prefill_client_name); ?>"></div>
     <?php endif; ?>
     <div class="hvac-job-grid">
       <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address" value="<?php echo esc_attr($prefill_property); ?>"></div>

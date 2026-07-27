@@ -248,70 +248,63 @@ HVACChecklist._setStatus = function(u, status) {
   this._saveData();
 };
 
-// ── CLIENT SEARCH ──────────────────────────────────────────────────────────
+// ── CLIENT SELECT DROPDOWN ─────────────────────────────────────────────────
 HVACChecklist._loadClients = function() {
   var self = this;
   var wid = self._wid;
-  var input = document.getElementById('hvac_client_input_' + wid);
-  var dd = document.getElementById('hvac_client_dd_' + wid);
-  if (!input || !dd) return;
+  var select = document.getElementById('hvac_client_select_' + wid);
+  if (!select) return;
 
-  var debounce = null;
+  var params = new URLSearchParams(window.location.search);
+  var cid = params.get('client_id');
+  if (cid) select.setAttribute('data-prefill-id', cid);
 
-  input.addEventListener('input', function() {
-    var q = input.value.trim();
-    if (q.length < 2) { dd.innerHTML = ''; dd.classList.remove('hvac-client-dropdown-open'); return; }
+  fetch('/wp-json/crm/v1/hvac/client-search?q=')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var list = Array.isArray(data) ? data : [];
+      if (list.length === 0) {
+        select.innerHTML = '<option value="">No clients found</option>';
+        return;
+      }
+      var html = '<option value="">— Select Client —</option>';
+      list.forEach(function(c) {
+        var name = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
+        html += '<option value="' + c.id + '" data-address="' + HVACChecklist._escAttr(c.address || '') + '">' +
+          HVACChecklist._escHtml(name) + (c.company ? ' — ' + HVACChecklist._escHtml(c.company) : '') +
+          '</option>';
+      });
+      select.innerHTML = html;
+      self._clientList = list;
 
-    clearTimeout(debounce);
-    debounce = setTimeout(function() {
-      fetch('/wp-json/crm/v1/hvac/client-search?q=' + encodeURIComponent(q))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          var list = Array.isArray(data) ? data : [];
-          dd.innerHTML = '';
-
-          if (list.length === 0) {
-            dd.classList.add('hvac-client-dropdown-open');
-            dd.innerHTML = '<div class="hvac-client-dd-item hvac-client-dd-empty">No clients found</div>';
-            return;
-          }
-
-          list.forEach(function(c) {
-            var name = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
-            var item = document.createElement('div');
-            item.className = 'hvac-client-dd-item';
-            item.textContent = name + (c.company ? ' \u2014 ' + c.company : '') + (c.email ? ' (' + c.email + ')' : '');
-            item.addEventListener('click', function() { self._selectClient(c); });
-            dd.appendChild(item);
-          });
-          dd.classList.add('hvac-client-dropdown-open');
-        })
-        .catch(function(err) {
-          console.error('HVAC client search error:', err);
-        });
-    }, 250);
-  });
-
-  input.addEventListener('blur', function() {
-    setTimeout(function() { dd.classList.remove('hvac-client-dropdown-open'); }, 200);
-  });
+      var prefillId = parseInt(select.getAttribute('data-prefill-id'));
+      if (prefillId) {
+        select.value = prefillId;
+        HVACChecklist._onClientSelect(wid);
+      }
+    })
+    .catch(function(err) {
+      console.error('HVAC client load error:', err);
+    });
 };
 
-HVACChecklist._selectClient = function(client) {
-  var wid = this._wid;
-  var name = ((client.first_name || '') + ' ' + (client.last_name || '')).trim();
-  var input = document.getElementById('hvac_client_input_' + wid);
-  var dd = document.getElementById('hvac_client_dd_' + wid);
-  var nameEl = document.getElementById('hvac_ji_client_name_' + wid);
-  var propEl = document.getElementById('hvac_ji_property_' + wid);
-  var contractEl = document.getElementById('hvac_ji_contract_' + wid);
+HVACChecklist._onClientSelect = function(wid) {
+  var over = wid || this._wid;
+  var select = document.getElementById('hvac_client_select_' + over);
+  if (!select) return;
 
-  if (input) { input.value = name; input.classList.add('hvac-client-selected'); }
-  if (dd) dd.classList.remove('hvac-client-dropdown-open');
-  if (nameEl) { nameEl.value = name; }
-  if (propEl && !propEl.value && client.address) propEl.value = client.address;
+  var option = select.options[select.selectedIndex];
+  if (!option || !option.value) return;
+
+  var address = option.getAttribute('data-address') || '';
+  var propEl = document.getElementById('hvac_ji_property_' + over);
+  var contractEl = document.getElementById('hvac_ji_contract_' + over);
+
+  if (propEl && !propEl.value && address) propEl.value = address;
   if (contractEl && !contractEl.value) contractEl.value = '';
-  this._selectedClientId = client.id;
+
+  this._selectedClientId = parseInt(option.value);
+  this._saveData();
 };
 
 // ── SCOPE TOGGLE ──────────────────────────────────────────────────────────
@@ -332,7 +325,7 @@ HVACChecklist._saveData = function() {
   var items = this._items;
   var count = this._unitCount;
 
-  ['property','date','tech','wo','contract','visit','client_name'].forEach(function(k) {
+  ['property','date','tech','wo','contract','visit'].forEach(function(k) {
     var el = document.getElementById('hvac_ji_' + k + '_' + wid);
     if (el) data['ji_' + k] = el.value;
   });
@@ -442,7 +435,6 @@ HVACChecklist.submitREST = function(widOverride, storageKeyOverride) {
     ji_date: (document.getElementById('hvac_ji_date_' + wid) || {}).value || '',
     ji_tech: (document.getElementById('hvac_ji_tech_' + wid) || {}).value || '',
     ji_visit: (document.getElementById('hvac_ji_visit_' + wid) || {}).value || '',
-    ji_client_name: (document.getElementById('hvac_ji_client_name_' + wid) || {}).value || '',
     unit_count: count,
     units: [],
     signoffs: [],
@@ -570,4 +562,8 @@ HVACChecklist._escHtml = function(str) {
   var div = document.createElement('div');
   div.appendChild(document.createTextNode(str));
   return div.innerHTML;
+};
+
+HVACChecklist._escAttr = function(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
