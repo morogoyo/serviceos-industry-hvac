@@ -227,3 +227,41 @@ The CRM repo root contains Docker volume mounts (themes, uploads, other plugins)
 - **Cross-Repo Workflow** — CRM repo changes first (renderer support), HVAC repo changes depend on CRM deployment. Two separate PRs, merge CRM first then HVAC. Keep branch names consistent across repos.
 - **Docker git Permission Issues** — Docker-owned files prevent `git reset --hard`, `git checkout`, `git stash`. Use specific file paths for `git add` and rely on `gh pr merge` for server-side merges.
 - **All Cards Must Be Collapsible** — every section card on detail/submission-detail pages must be collapsible with the standard `<details>` pattern (icon, label, badge, `expand_less`, localStorage persistence). No plain non-collapsible cards on detail pages.
+
+## Session Learnings — 2026-07-26 (Checklist Form URL & Settings Integration)
+
+### Checklist Page URL Auto-Detection
+On plugin activation, `Activator::activate()` runs `get_posts()` searching published pages/posts for `[hvac_checklist` text, stores the first matched permalink in `wp_option`: `serviceos_ip_checklist_page_url`. This makes the checklist form discoverable without hardcoding URLs.
+
+```php
+$pages = get_posts(array(
+    'post_type'   => array('page', 'post'),
+    'post_status' => 'publish',
+    's'           => '[hvac_checklist',
+    'numberposts' => 1,
+));
+if (!empty($pages)) {
+    update_option('serviceos_ip_checklist_page_url', get_permalink($pages[0]->ID));
+}
+```
+
+### Link Rendering Pattern in Harness
+The checklist form link renders as an `html` section in `get_submission_list()` — not as a `data_table` cell (which HTML-escapes all content via `esc_html()` in page-renderer.php). Use `target="_blank"` + `rel="noopener"` for external/public pages.
+
+```php
+$checklist_url = get_option('serviceos_ip_checklist_page_url', '');
+if ($checklist_url) {
+    $data['sections'][] = [
+        'type' => 'html',
+        'content' => '<a href="' . esc_url($checklist_url) . '" 
+            class="crm-btn crm-btn-secondary" target="_blank" rel="noopener">
+            Open Checklist Form ↗</a>',
+    ];
+}
+```
+
+### Manual Override via CRM Settings
+The URL can be changed in CRM Settings → "Field Checklist Form" card. Saved via `admin-post.php?action=service_os_save_checklist_url` handler (`service-os-crm.php`). Template passes `$checklist_page_url` from `render_settings()` in `class-menu.php`.
+
+### data_table Section Limitation
+The `render_data_table()` function in `page-renderer.php:429` wraps every cell in `esc_html()` — HTML links inside `data_table` rows are stripped. Always use raw `html` section type when clickable links are needed in tables.
