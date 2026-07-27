@@ -194,6 +194,9 @@ class Public_Checklist {
       </div>
     </div>
     <?php endif; ?>
+    <?php if ($client_source !== 'none'): ?>
+    <div class="hvac-job-field"><label>Client Name</label><input type="text" id="hvac_ji_client_name_<?php echo esc_attr($wid); ?>" readonly placeholder="—" value="<?php echo esc_attr($prefill_client_name); ?>"></div>
+    <?php endif; ?>
     <div class="hvac-job-grid">
       <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address" value="<?php echo esc_attr($prefill_property); ?>"></div>
       <div class="hvac-job-field"><label>Date of Service</label><input type="date" id="hvac_ji_date_<?php echo esc_attr($wid); ?>"></div>

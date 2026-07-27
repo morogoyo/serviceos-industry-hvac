@@ -302,11 +302,13 @@ HVACChecklist._selectClient = function(client) {
   var name = ((client.first_name || '') + ' ' + (client.last_name || '')).trim();
   var input = document.getElementById('hvac_client_input_' + wid);
   var dd = document.getElementById('hvac_client_dd_' + wid);
+  var nameEl = document.getElementById('hvac_ji_client_name_' + wid);
   var propEl = document.getElementById('hvac_ji_property_' + wid);
   var contractEl = document.getElementById('hvac_ji_contract_' + wid);
 
   if (input) { input.value = name; input.classList.add('hvac-client-selected'); }
   if (dd) dd.classList.remove('hvac-client-dropdown-open');
+  if (nameEl) { nameEl.value = name; }
   if (propEl && !propEl.value && client.address) propEl.value = client.address;
   if (contractEl && !contractEl.value) contractEl.value = '';
   this._selectedClientId = client.id;
@@ -330,7 +332,7 @@ HVACChecklist._saveData = function() {
   var items = this._items;
   var count = this._unitCount;
 
-  ['property','date','tech','wo','contract','visit'].forEach(function(k) {
+  ['property','date','tech','wo','contract','visit','client_name'].forEach(function(k) {
     var el = document.getElementById('hvac_ji_' + k + '_' + wid);
     if (el) data['ji_' + k] = el.value;
   });
@@ -365,7 +367,7 @@ HVACChecklist._loadData = function() {
   try { data = JSON.parse(localStorage.getItem(this._storageKey) || 'null'); } catch(e) {}
   if (!data) return;
 
-  ['property','date','tech','wo','contract','visit'].forEach(function(k) {
+  ['property','date','tech','wo','contract','visit','client_name'].forEach(function(k) {
     var el = document.getElementById('hvac_ji_' + k + '_' + wid);
     if (el && data['ji_' + k] !== undefined) el.value = data['ji_' + k];
   });
@@ -440,6 +442,7 @@ HVACChecklist.submitREST = function(widOverride, storageKeyOverride) {
     ji_date: (document.getElementById('hvac_ji_date_' + wid) || {}).value || '',
     ji_tech: (document.getElementById('hvac_ji_tech_' + wid) || {}).value || '',
     ji_visit: (document.getElementById('hvac_ji_visit_' + wid) || {}).value || '',
+    ji_client_name: (document.getElementById('hvac_ji_client_name_' + wid) || {}).value || '',
     unit_count: count,
     units: [],
     signoffs: [],
