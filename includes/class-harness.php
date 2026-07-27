@@ -259,6 +259,14 @@ class Harness extends Service_OS_CRM_Harness {
         $data['hero_stat'] = ['label' => 'Total Submissions', 'value' => (string) $total];
         $data['tags'] = [(string) $unique_techs . ' Technicians', (string) $recent . ' Last 30 Days'];
 
+        $checklist_url = get_option('serviceos_ip_checklist_page_url', '');
+        if ($checklist_url) {
+            $data['sections'][] = [
+                'type' => 'html',
+                'content' => '<a href="' . esc_url($checklist_url) . '" class="crm-btn crm-btn-secondary" target="_blank" rel="noopener" style="margin-bottom:12px;">Open Checklist Form &#x2197;</a>',
+            ];
+        }
+
         $detail_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
 
         $table_html = '<div class="crm-card crm-section-card">';
