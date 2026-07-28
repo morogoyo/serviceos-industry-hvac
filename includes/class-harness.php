@@ -326,6 +326,18 @@ class Harness extends Service_OS_CRM_Harness {
             return ['type' => 'detail', 'title' => 'Not Found'];
         }
 
+        if (!empty($_GET['delete']) && absint($_GET['delete']) === 1) {
+            check_admin_referer('hvac_delete_submission_' . $submission_id);
+            global $wpdb;
+            $wpdb->suppress_errors(true);
+            $wpdb->delete($wpdb->prefix . 'hvac_signoffs', ['submission_id' => $submission_id], ['%d']);
+            $wpdb->delete($wpdb->prefix . 'hvac_unit_items', ['submission_id' => $submission_id], ['%d']);
+            $wpdb->delete($wpdb->prefix . 'hvac_submissions', ['id' => $submission_id], ['%d']);
+            $wpdb->suppress_errors(false);
+            wp_safe_redirect(admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions&deleted=1'));
+            exit;
+        }
+
         $submission = $this->call_rest('hvac/submissions/' . $submission_id);
         if (!$submission || !is_array($submission)) {
             return ['type' => 'detail', 'title' => 'Not Found'];
@@ -336,7 +348,10 @@ class Harness extends Service_OS_CRM_Harness {
 
         $back_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions');
         $list_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
-        $delete_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id);
+        $delete_url = wp_nonce_url(
+            admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id),
+            'hvac_delete_submission_' . $submission_id
+        );
 
         $tech_name = $submission['technician_name'] ?: 'User #' . ($submission['technician_id'] ?? 0);
 
