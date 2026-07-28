@@ -2,6 +2,8 @@
 namespace ServiceOS_Industry_Plugin;
 
 class Seeder {
+    const SERVICE_PIPELINE_NAME = 'Service & Repair Pipeline';
+
     public static function register() {
         add_filter('serviceos_crm_module_seed', [__CLASS__, 'seed'], 10, 2);
     }
