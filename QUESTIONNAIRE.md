@@ -144,7 +144,7 @@ Uses CRM defaults: 25% = "Kickoff", 50% = "Midpoint", 75% = "Final Review", 100%
 | New Build HVAC Rough-In          | 8,000     |
 | New Build Full HVAC System       | 12,000    |
 
-Total: 36 seed services across 9 categories.
+Total: 38 seed services across 9 categories.
 
 ---
 
