@@ -153,21 +153,27 @@ Total: 38 seed services across 9 categories.
 - **Need custom database tables?** [x] Yes [ ] No
   - **hvac_submissions** — stores checklist submission metadata
     - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
-    - uuid (VARCHAR 36 UNIQUE)
-    - property_address, date_of_service, technician_name, work_order, contract_number, visit_type, unit_count, company_name, submitted_at, raw_json
+    - ji_contract, ji_wo, ji_property, ji_date, ji_tech, ji_visit
+    - uuid (VARCHAR 36 UNIQUE), property_address, date_of_service, technician_name, work_order, contract_number, visit_type, raw_json
+    - technician_id (BIGINT), client_id (BIGINT), created_at (DATETIME)
     - Indexes: date_of_service, technician_name, property_address
   - **hvac_unit_items** — per-unit checklist item rows
     - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
-    - submission_id, unit_number, item_index, checked, status, supply_temp, return_temp, delta_t, filter_size, notes, initials
-    - Unique key: (submission_id, unit_number, item_index)
-    - Indexes: submission_id, unit_number
+    - submission_id (BIGINT, FK → hvac_submissions ON DELETE CASCADE), unit_number (INT)
+    - equipment_type (VARCHAR), serial_number (VARCHAR, INDEXED), model_number (VARCHAR)
+    - checks_json (LONGTEXT), sup, ret, dt, fs, notes, init, status
+    - Indexes: submission_id, serial_number
   - **hvac_signoffs** — final sign-off checklist items
     - id (BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY)
-    - submission_id, item_label, checked
+    - submission_id (BIGINT, FK → hvac_submissions ON DELETE CASCADE)
+    - signoff_type (VARCHAR), printed_name (VARCHAR), signature_data (LONGTEXT), signed_at (DATETIME)
     - Index: submission_id
 
 - **Need custom REST API endpoints?** [x] Yes [ ] No
-  - `POST /wp-json/crm/v1/hvac/checklist-submit` — accepts JSON checklist payload, saves to DB, sends email notification. Returns `{success, message, submission_id}`. Public (no auth required, nonce-verified).
+  - `POST /wp-json/crm/v1/hvac/checklist-submit` — accepts JSON checklist payload, saves to DB, auto-creates CRM deal, sends email notification. Returns `{success, message, submission_id, deal_id}`. Public (no auth required, nonce-verified).
+  - `GET /wp-json/crm/v1/hvac/submissions` — paginated list of submissions (supports `page` and `per_page` params).
+  - `GET /wp-json/crm/v1/hvac/submissions/{id}` — single submission with nested units and signoffs.
+  - `GET /wp-json/crm/v1/hvac/client-search?q=...` — public client search with debounced LIKE query.
 
 - **Need custom page sections beyond the standard schema?** [ ] Yes [x] No
   - Uses standard sections: info_table, unit_overview, expandable_units, signoffs, data_table, html.
@@ -182,7 +188,11 @@ Total: 38 seed services across 9 categories.
 
 ## 8. Additional Notes
 
-- Checklist supports two unit counts: 10-unit and 52-unit split systems, selected via shortcode attribute `units="10"` or `units="52"`.
-- An Elementor widget (`HVAC_Checklist_Widget`) wraps the shortcode for drag-and-drop page builder use.
+- Checklist supports dynamic unit count (1-99, configurable via shortcode `units` attribute or Elementor widget).
+- An Elementor widget (`HVAC_Checklist_Widget`) wraps the shortcode for drag-and-drop page builder use, with REPEATER controls for configurable checklist items.
 - Email notifications on checklist submission are sent via `wp_mail` to a configurable recipient (stored in `hvac_settings` option).
-- The 10-point checklist items are: Air Filter Replaced, Thermostat Checked, Condenser Coil Cleaned, Evaporator Coil Checked, Blower Operation Verified, Refrigerant Level Checked, Electrical Connections Checked, Drain Line Inspected, Safety Controls Tested, System Performance Verified.
+- Default checklist items: Evaporator coil inspect, condensate drain flush, control systems inspect, contactors check, air filter replace, condenser fan inspect, refrigerant check, leak inspection, system performance, service report — all configurable via Elementor REPEATER.
+- Submission delete handler with nonce verification available from admin detail view.
+- Client search dropdown powered by public REST endpoint with 250ms debounce.
+- Auto-create CRM deal on checklist submission in "Service & Repair Pipeline" at first stage.
+- Technician name auto-filled from current WP user when logged in.

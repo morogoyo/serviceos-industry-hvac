@@ -304,3 +304,59 @@ When passing repeater data through shortcode attrs, use `$items_json` → `esc_a
 
 ### Debounced Client Search
 Use `setTimeout` with 250ms debounce on the search input. Fetch from `/wp-json/crm/v1/hvac/client-search?q=...` (public endpoint) rather than loading all clients upfront and filtering client-side. This avoids 403 errors on public pages.
+
+## Session Learnings — 2026-07-27 (Orphan Commit Recovery & Docs Sync)
+
+### Cherry-Picking Stale Feature Branches
+When feature branches are merged but the local copies persist, check which commits are truly missing from `dev` before deleting. Use `git log {branch} --not dev --oneline` to find orphan commits. Not all commits are safe to apply — evaluate for conflicts with subsequently merged work before cherry-picking.
+
+### Evaluating Orphan Commits for Risk
+Before applying a stray commit, check:
+1. **Does it conflict with newer merged code?** (e.g., old `checklist-core.js` with hardcoded ITEMS vs. the dynamic data-items pattern)
+2. **Does it assume methods/constants that don't exist yet?** (e.g., `Seeder::SERVICE_PIPELINE_NAME` not defined)
+3. **Does it duplicate functionality already in dev?** (e.g., pagination block already present)
+4. **Does it break existing rendering?** (e.g., removing `status_color` from unit_overview breaks page-renderer)
+
+### Cherry-Pick Conflicts Across Rewritten Code
+When a commit's base is significantly behind the current codebase (differing `submitREST()` signatures, different JS architecture), the cherry-pick will conflict heavily. **Apply changes manually** instead — identify the semantic intent of the commit and re-implement against the current code.
+
+### Delete Handler Pattern for Harness Pages
+The harness toolbar supports `['type' => 'delete', 'url' => '...', 'confirm' => '...']`. The delete handler should:
+- Live at the top of the page method, before any data fetching
+- Use `check_admin_referer()` with a unique action string
+- Delete child rows before parent (or let FK CASCADE handle it)
+- Call `$wpdb->suppress_errors(true)` around DB operations
+- Redirect via `wp_safe_redirect()` + `exit` (not `echo '<script>window.location'`)
+
+```php
+if (!empty($_GET['delete']) && absint($_GET['delete']) === 1) {
+    check_admin_referer('hvac_delete_submission_' . $submission_id);
+    global $wpdb;
+    $wpdb->suppress_errors(true);
+    $wpdb->delete($wpdb->prefix . 'hvac_signoffs', ['submission_id' => $submission_id], ['%d']);
+    $wpdb->delete($wpdb->prefix . 'hvac_unit_items', ['submission_id' => $submission_id], ['%d']);
+    $wpdb->delete($wpdb->prefix . 'hvac_submissions', ['id' => $submission_id], ['%d']);
+    $wpdb->suppress_errors(false);
+    wp_safe_redirect(admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions&deleted=1'));
+    exit;
+}
+```
+
+### Delete URL Nonce Pattern
+Use `wp_nonce_url()` to add a nonce to the delete URL in the toolbar. Pass the submission ID in the nonce action for scoped verification:
+```php
+$delete_url = wp_nonce_url(
+    admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id),
+    'hvac_delete_submission_' . $submission_id
+);
+```
+
+### FK Constraints and dbDelta
+dbDelta is unreliable for ALTER TABLE on existing installs. FOREIGN KEY constraints added via `create_tables()` will only take effect on fresh plugin activations. Existing installs rely on the column-aware migration system. Always handle backward compatibility — the migration path (`maybe_migrate_tables`) is the sole authority on schema versions.
+
+### Branch Hygiene After Merges
+After all feature branches are merged:
+1. Delete local branches: `git branch -D {merged-branch}`
+2. Delete remote branches: `git push origin --delete {branch}`
+3. Delete merged feature branch remotes (merged PRs auto-delete their branches on GitHub, but manual pushes leave remotes)
+4. Verify clean state: `git branch -a` should show only `dev`, `main`, and `upstream/main`
