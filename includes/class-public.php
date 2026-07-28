@@ -32,11 +32,21 @@ class Public_Checklist {
             'callback' => [__CLASS__, 'handle_get_submission_detail'],
             'permission_callback' => '__return_true',
         ]);
+
+        register_rest_route('crm/v1', '/hvac/client-search', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'handle_client_search'],
+            'permission_callback' => '__return_true',
+        ]);
     }
 
     public static function render_checklist($atts) {
         $atts = shortcode_atts([
             'units'                   => '10',
+            'max_units'               => '10',
+            'allow_unit_add_remove'   => '0',
+            'items'                   => '[]',
+            'client_source'           => 'search_dropdown',
             'ji_wo'                   => '',
             'ji_contract'             => '',
             'allow_wo_override'       => '1',
@@ -54,9 +64,33 @@ class Public_Checklist {
         }
 
         $unit_count = absint($atts['units']);
-        if (!in_array($unit_count, [10, 52])) {
-            $unit_count = 10;
+        $unit_count = max(1, min(99, $unit_count));
+
+        $max_units = absint($atts['max_units']);
+        $max_units = max($unit_count, min(99, $max_units));
+
+        $allow_add_remove = $atts['allow_unit_add_remove'] === '1';
+        $client_source = sanitize_text_field($atts['client_source']);
+
+        $items_raw = json_decode($atts['items'], true);
+        if (!is_array($items_raw) || empty($items_raw)) {
+            $items_raw = [
+                ['item_label' => __('Evaporator coil — light inspect & surface clean', 'serviceos-industry-hvac')],
+                ['item_label' => __('Flush and treat condensate drain lines', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect control systems and safety devices', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check contactors and electrical components', 'serviceos-industry-hvac')],
+                ['item_label' => __('Replace all air filters (included)', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect condenser fan blades and motors', 'serviceos-industry-hvac')],
+                ['item_label' => __('Check refrigerant levels and system condition', 'serviceos-industry-hvac')],
+                ['item_label' => __('Inspect for visible leaks / abnormal condensation', 'serviceos-industry-hvac')],
+                ['item_label' => __('Evaluate overall system performance', 'serviceos-industry-hvac')],
+                ['item_label' => __('Service report provided after visit', 'serviceos-industry-hvac')],
+            ];
         }
+        $item_labels = array_map(function($it) {
+            return $it['item_label'] ?? '';
+        }, $items_raw);
+        $item_count = count($item_labels);
 
         $wo_value = sanitize_text_field($atts['ji_wo']);
         if (empty($wo_value) && !empty($_GET['wo_id'])) {
@@ -70,8 +104,33 @@ class Public_Checklist {
         $assignment_lock = (bool) $atts['enforce_assignment_lock'];
         $tech_readonly = $assignment_lock ? ' readonly' : '';
 
-        $wid = 'hvac' . $unit_count . '_' . uniqid();
-        $storage_key = 'hvac_' . $unit_count . 'unit_v1';
+        $current_user = wp_get_current_user();
+        $tech_name = '';
+        if ($current_user && $current_user->exists()) {
+            $tech_name = $current_user->display_name;
+            $tech_readonly = ' readonly';
+        }
+
+        $prefill_client_name = '';
+        $prefill_property = '';
+        $prefill_contract = '';
+        if ($client_source === 'url_param' && !empty($_GET['client_id'])) {
+            global $wpdb;
+            $cid = absint($_GET['client_id']);
+            $clients_table = $wpdb->prefix . 'crm_clients';
+            if ($wpdb->get_var("SHOW TABLES LIKE '{$clients_table}'") === $clients_table) {
+                $client = $wpdb->get_row($wpdb->prepare(
+                    "SELECT first_name, last_name, address, company FROM {$clients_table} WHERE id = %d", $cid
+                ));
+                if ($client) {
+                    $prefill_client_name = trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''));
+                    $prefill_property = $client->address ?? '';
+                }
+            }
+        }
+
+        $wid = 'hvac_' . uniqid();
+        $storage_key = 'hvac_checklist_v2';
 
         $settings = get_option('hvac_settings', []);
         $company = $settings['company'] ?? 'ServicePro Field';
@@ -81,19 +140,28 @@ class Public_Checklist {
 
         $navy = esc_attr($atts['navy_color']);
         $orange = esc_attr($atts['orange_color']);
-        $total_items = $unit_count * 5;
+        $total_items = $unit_count * $item_count;
+        $items_json_esc = esc_attr(json_encode($item_labels));
 
         ob_start();
         ?>
 <style id="hvac-elementor-style-<?php echo esc_attr($wid); ?>">
 #<?php echo esc_attr($wid); ?> { --navy: <?php echo $navy; ?>; --orange: <?php echo $orange; ?>; }
 </style>
-<div class="hvac-wrap hvac-wrap-<?php echo $unit_count; ?>unit" id="<?php echo esc_attr($wid); ?>"
+<div class="hvac-wrap" id="<?php echo esc_attr($wid); ?>"
      data-recipient="<?php echo esc_attr($recipient_name); ?>"
      data-wo-override="<?php echo esc_attr($atts['allow_wo_override']); ?>"
      data-assignment-lock="<?php echo $assignment_lock ? '1' : '0'; ?>"
      data-auto-track="<?php echo esc_attr($atts['auto_track']); ?>"
-     data-technician-lock="<?php echo esc_attr($atts['technician_lock']); ?>">
+     data-technician-lock="<?php echo esc_attr($atts['technician_lock']); ?>"
+     data-default-units="<?php echo $unit_count; ?>"
+     data-max-units="<?php echo $max_units; ?>"
+     data-allow-add-remove="<?php echo $allow_add_remove ? '1' : '0'; ?>"
+     data-items="<?php echo $items_json_esc; ?>"
+     data-client-source="<?php echo esc_attr($client_source); ?>"
+     data-storage-key="<?php echo esc_attr($storage_key); ?>"
+     data-rest-url="<?php echo esc_url($rest_url); ?>"
+     data-nonce="<?php echo esc_attr($nonce); ?>">
 
   <div class="hvac-header">
     <div class="hvac-header-main">
@@ -116,10 +184,19 @@ class Public_Checklist {
 
   <div class="hvac-card">
     <div class="hvac-section-label">▸ Job Information</div>
+    <?php if ($client_source !== 'none'): ?>
+    <div class="hvac-client-select">
+      <label>Client</label>
+      <select id="hvac_client_select_<?php echo esc_attr($wid); ?>" 
+              onchange="HVACChecklist._onClientSelect('<?php echo esc_attr($wid); ?>')">
+        <option value="">— Select Client —</option>
+      </select>
+    </div>
+    <?php endif; ?>
     <div class="hvac-job-grid">
-      <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address"></div>
+      <div class="hvac-job-field"><label>Property / Address</label><input type="text" id="hvac_ji_property_<?php echo esc_attr($wid); ?>" placeholder="Enter property name or address" value="<?php echo esc_attr($prefill_property); ?>"></div>
       <div class="hvac-job-field"><label>Date of Service</label><input type="date" id="hvac_ji_date_<?php echo esc_attr($wid); ?>"></div>
-      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name"<?php echo $tech_readonly; ?>></div>
+      <div class="hvac-job-field"><label>Technician Name</label><input type="text" id="hvac_ji_tech_<?php echo esc_attr($wid); ?>" placeholder="Full name" value="<?php echo esc_attr($tech_name); ?>"<?php echo $tech_readonly; ?>></div>
       <div class="hvac-job-field"><label>Work Order #</label><input type="text" id="hvac_ji_wo_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($wo_value); ?>"<?php echo $wo_readonly; ?>></div>
       <div class="hvac-job-field"><label>Contract #</label><input type="text" id="hvac_ji_contract_<?php echo esc_attr($wid); ?>" placeholder="&mdash;" value="<?php echo esc_attr($contract_value); ?>"></div>
       <div class="hvac-job-field"><label>Visit Type</label>
@@ -137,33 +214,32 @@ class Public_Checklist {
 
   <div class="hvac-card">
     <button class="hvac-scope-toggle" onclick="HVACChecklist.toggleScope(this)">
-      ? Scope of Service — Each Visit Includes
-      <span class="hvac-arrow">?</span>
+      ▸ Scope of Service — Each Visit Includes
+      <span class="hvac-arrow">▾</span>
     </button>
     <div class="hvac-scope-body">
       <div class="hvac-scope-grid">
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Light inspect &amp; surface-level clean of evaporator coil*</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Check refrigerant levels and system condition</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Flush and treat condensate drain lines</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Inspect for visible leaks or abnormal condensation</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Inspect control systems and safety devices</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Evaluate overall system performance</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Check contactors and electrical components for wear</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Replace all air filters (included)</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Inspect condenser fan blades and motors</span></div>
-        <div class="hvac-scope-item"><span class="hvac-tick">?</span><span>Provide service report after each visit</span></div>
+        <?php foreach ($item_labels as $label): ?>
+        <div class="hvac-scope-item"><span class="hvac-tick">✓</span><span><?php echo esc_html($label); ?></span></div>
+        <?php endforeach; ?>
       </div>
       <div class="hvac-coil-note">* Evaporator coil scope: Surface-level cleaning of accessible coil only. This is NOT a deep clean. Deep cleaning requires additional labor and is billed separately.</div>
     </div>
   </div>
 
-  <div class="hvac-units-label">? Unit-by-Unit Service Checklist</div>
-  <div class="hvac-units-container"></div>
+  <div class="hvac-units-label">
+    ▸ Unit-by-Unit Service Checklist
+    <?php if ($allow_add_remove): ?>
+    <button type="button" class="hvac-btn-add-unit" id="hvac_add_unit_<?php echo esc_attr($wid); ?>"
+            onclick="HVACChecklist.addUnit('<?php echo esc_attr($wid); ?>')" title="Add Unit">+ Add Unit</button>
+    <?php endif; ?>
+  </div>
+  <div class="hvac-units-container" id="hvac_units_<?php echo esc_attr($wid); ?>"></div>
 
   <div class="hvac-card">
     <div class="hvac-section-label">? Final Sign-Off</div>
     <div class="hvac-signoff-grid">
-      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>All <?php echo $unit_count; ?> units serviced and checklist complete</span></label>
+      <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>All units serviced and checklist complete</span></label>
       <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>All filters replaced</span></label>
       <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>Service report prepared</span></label>
       <label class="hvac-signoff-item"><input type="checkbox" onchange="HVACChecklist.toggleSignoff(this)"><span>No units require follow-up</span></label>
@@ -191,12 +267,12 @@ class Public_Checklist {
 
   <div class="hvac-action-bar">
     <button class="hvac-btn hvac-btn-secondary" onclick="HVACChecklist.clearAll('<?php echo esc_js($storage_key); ?>')">Clear All</button>
-    <button class="hvac-btn hvac-btn-secondary" onclick="window.print()">? Print</button>
+    <button class="hvac-btn hvac-btn-secondary" onclick="window.print()">🖨 Print</button>
     <button class="hvac-btn hvac-btn-submit" id="hvac_submit_btn_<?php echo esc_attr($wid); ?>"
-      onclick="HVACChecklist.submitREST('<?php echo esc_js($wid); ?>',<?php echo $unit_count; ?>,'<?php echo esc_js($storage_key); ?>','<?php echo esc_js($rest_url); ?>','<?php echo esc_js($nonce); ?>')">
-      ? Submit Report
+      onclick="HVACChecklist.submitREST('<?php echo esc_js($wid); ?>','<?php echo esc_js($storage_key); ?>')">
+      ✉ Submit Report
     </button>
-    <button class="hvac-btn hvac-btn-primary" onclick="HVACChecklist.expandAll('<?php echo esc_attr($wid); ?>',<?php echo $unit_count; ?>)">Expand All</button>
+    <button class="hvac-btn hvac-btn-primary" onclick="HVACChecklist.expandAll('<?php echo esc_attr($wid); ?>')">Expand All</button>
   </div>
 
 </div>
@@ -227,21 +303,12 @@ class Public_Checklist {
             true
         );
 
-        $ten_file = SERVICEOS_IP_PATH . 'assets/js/checklist-10.js';
+        $init_file = SERVICEOS_IP_PATH . 'assets/js/checklist-init.js';
         wp_enqueue_script(
-            'hvac-checklist-10',
-            SERVICEOS_IP_URL . 'assets/js/checklist-10.js',
+            'hvac-checklist-init',
+            SERVICEOS_IP_URL . 'assets/js/checklist-init.js',
             ['hvac-checklist-core'],
-            file_exists($ten_file) ? filemtime($ten_file) : SERVICEOS_IP_VERSION,
-            true
-        );
-
-        $fiftytwo_file = SERVICEOS_IP_PATH . 'assets/js/checklist-52.js';
-        wp_enqueue_script(
-            'hvac-checklist-52',
-            SERVICEOS_IP_URL . 'assets/js/checklist-52.js',
-            ['hvac-checklist-core'],
-            file_exists($fiftytwo_file) ? filemtime($fiftytwo_file) : SERVICEOS_IP_VERSION,
+            file_exists($init_file) ? filemtime($init_file) : SERVICEOS_IP_VERSION,
             true
         );
     }
@@ -340,6 +407,34 @@ class Public_Checklist {
         ));
 
         return rest_ensure_response($submission);
+    }
+
+    public static function handle_client_search($request) {
+        global $wpdb;
+        $q = sanitize_text_field($request->get_param('q') ?? '');
+        $business_id = (int) get_option('service_os_crm_business_id', 0);
+
+        $clients_table = $wpdb->prefix . 'crm_clients';
+        if ($wpdb->get_var("SHOW TABLES LIKE '{$clients_table}'") !== $clients_table) {
+            return rest_ensure_response([]);
+        }
+
+        if (empty($q) || strlen($q) < 2) {
+            return rest_ensure_response([]);
+        }
+
+        $like = '%' . $wpdb->esc_like($q) . '%';
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, first_name, last_name, email, company, address
+             FROM {$clients_table}
+             WHERE business_id = %d
+               AND (first_name LIKE %s OR last_name LIKE %s OR email LIKE %s OR company LIKE %s)
+             ORDER BY last_name, first_name
+             LIMIT 10",
+            $business_id, $like, $like, $like, $like
+        ));
+
+        return rest_ensure_response($results);
     }
 
     private static function register_equipment_and_create_deal($payload, $submission_id) {
