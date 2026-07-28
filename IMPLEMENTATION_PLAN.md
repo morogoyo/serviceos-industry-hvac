@@ -1,6 +1,23 @@
 # HVAC Plugin — Implementation Plan
 
-_Adopted: 2026-07-09_
+_Adopted: 2026-07-09 | Completed: 2026-07-27_
+
+> **Status: ALL PROMPTS COMPLETE.** See session learnings in AGENTS.md for implementation details, bug fixes, and architectural decisions made during development.
+
+## Completion Summary
+
+| Prompt | Branch | Merged | Key Deliverables |
+|--------|--------|:------:|------------------|
+| #1: DB Provisioning & Seeding | `feature/hvac-db-seeder` | ✅ | 3 tables with FK CASCADE, 10 categories, 2 pipelines, 38 services |
+| #2: REST Controller & CRM Deals | `feature/hvac-public-api` | ✅ | 4 REST endpoints, column-aware saves, auto-create deals, equipment tracking |
+| #3: Shortcode & Elementor | `feature/hvac-frontend-core` | ✅ | `[hvac_checklist]` with dynamic units, Elementor REPEATER items, client search |
+| #4: Admin Harness | `feature/hvac-admin-harness` | ✅ | 4 pages (dashboard, detail, submissions list/detail), collapsible sections, delete handler |
+
+### Post-Plan Additions
+- **Dynamic Elementor checklist** — REPEATER items replace hardcoded JS array (`feature/elementor-dynamic-checklist`, merged 2026-07-27)
+- **Submission delete handler** — nonce-verified deletion with redirect (`fix/delete-submission-handler`, merged 2026-07-27)
+- **FK constraints** — ON DELETE CASCADE on unit_items and signoffs tables
+- **Pipeline constant** — `Seeder::SERVICE_PIPELINE_NAME` replaces hardcoded string
 
 ---
 
@@ -67,7 +84,7 @@ The implementation must adhere strictly to isolated feature lifecycles off the `
 
 ---
 
-### 🛠️ Prompt 1: Database Provisioning & Seed Infrastructure
+### 🛠️ Prompt 1: Database Provisioning & Seed Infrastructure ✅ COMPLETE
 
 **Target Branch:** `feature/hvac-db-seeder`
 
@@ -89,7 +106,7 @@ The implementation must adhere strictly to isolated feature lifecycles off the `
 
 ---
 
-### 🛠️ Prompt 2: REST Controller & CRM Deal Linkage
+### 🛠️ Prompt 2: REST Controller & CRM Deal Linkage ✅ COMPLETE
 
 **Target Branch:** `feature/hvac-public-api`
 
@@ -111,7 +128,7 @@ The implementation must adhere strictly to isolated feature lifecycles off the `
 
 ---
 
-### 🛠️ Prompt 3: Shortcode Engine & Elementor Dynamic Cockpit
+### 🛠️ Prompt 3: Shortcode Engine & Elementor Dynamic Cockpit ✅ COMPLETE
 
 **Target Branch:** `feature/hvac-frontend-core`
 
@@ -132,7 +149,7 @@ The implementation must adhere strictly to isolated feature lifecycles off the `
 
 ---
 
-### 🛠️ Prompt 4: Administrative Reporting & Harness Visualizer
+### 🛠️ Prompt 4: Administrative Reporting & Harness Visualizer ✅ COMPLETE
 
 **Target Branch:** `feature/hvac-admin-harness`
 

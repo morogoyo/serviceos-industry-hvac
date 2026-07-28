@@ -6,13 +6,14 @@ HVAC-specific module for [ServiceOS CRM](https://github.com/morogoyo/wp_crm_gene
 
 - **10 service categories**: AC & Cooling, Heating, Repair & Diagnostics, Air Quality, Ductwork, Thermostats & Controls, Maintenance Plans, Commercial HVAC, New Construction, General
 - **2 pipelines**: 12-stage "HVAC Sales Pipeline" + 6-stage "Service & Repair Pipeline"
-- **36 seed services** across all categories with realistic pricing
+- **38 seed services** across all categories with realistic pricing
 - **Dashboard & detail pages** for the service catalog (CRM admin)
-- **Field checklist system**: public-facing `[hvac_checklist]` shortcode with 10-point technician checklist, supports 10-unit and 52-unit split systems
-- **Elementor widget**: `HVAC_Checklist_Widget` wraps the shortcode for drag-and-drop page builder use
-- **REST API**: `POST /wp-json/crm/v1/hvac/checklist-submit` accepts checklist JSON, persists to DB, sends email
+- **Field checklist system**: public-facing `[hvac_checklist]` shortcode with configurable checklist items, dynamic unit count (1-99), client search dropdown, add/remove units in the field
+- **Elementor widget**: `HVAC_Checklist_Widget` with REPEATER for configurable checklist items, brand colors, and operational mode controls
+- **REST API**: `POST /wp-json/crm/v1/hvac/checklist-submit` accepts JSON, persists to DB, auto-creates CRM deal, sends email. Additional endpoints for submissions list, submission detail, and client search
 - **Email notifications**: HTML email reports sent on checklist submission
-- **CRM integration**: sidebar navigation, page rendering, CSS/JS inheritance, API access
+- **CRM integration**: sidebar navigation, page rendering, CSS/JS inheritance, API access, submission deletion with nonce verification
+- **Database**: FOREIGN KEY constraints with ON DELETE CASCADE, schema migration system with column-aware writes
 
 ## Requirements
 
@@ -27,24 +28,22 @@ HVAC-specific module for [ServiceOS CRM](https://github.com/morogoyo/wp_crm_gene
 ├── includes/
 │   ├── class-harness.php              # CRM harness (4 pages: dashboard, detail, submissions, submission-detail)
 │   ├── class-activator.php            # Activation/deactivation hooks + table creation
-│   ├── class-seeder.php               # Seeds 10 categories, 2 pipelines, 36 services
+│   ├── class-seeder.php               # Seeds 10 categories, 2 pipelines, 38 services
 │   ├── class-assets.php               # Admin CSS/JS enqueuing + localized config
 │   ├── class-email.php                # Checklist submission email notifications
-│   ├── class-public.php               # Shortcode [hvac_checklist], REST route, DB schema, save logic
+│   ├── class-public.php               # Shortcode [hvac_checklist], REST routes, DB schema, save logic, migrations
 │   └── widgets/
-│       └── class-hvac-checklist-widget.php  # Elementor widget wrapper
+│       └── class-hvac-checklist-widget.php  # Elementor widget with REPEATER controls
 ├── templates/
-│   ├── checklist-10.php               # 10-unit checklist HTML template (legacy)
 │   └── email-report.php               # HTML email template for checklist reports
 ├── assets/
 │   ├── css/
 │   │   ├── module.css                 # CRM admin styles (CRM CSS variables)
-│   │   └── checklist.css              # Front-end checklist styles (683 lines)
+│   │   └── checklist.css              # Front-end checklist styles
 │   └── js/
-│       ├── module.js                  # CRM admin JS (new service modal, API calls)
-│       ├── checklist-core.js          # Shared checklist logic (472 lines)
-│       ├── checklist-10.js            # 10-unit checklist initializer
-│       └── checklist-52.js            # 52-unit checklist initializer
+│       ├── module.js                  # CRM admin JS (new service modal, create deal, API calls)
+│       ├── checklist-core.js          # Shared checklist logic (dynamic items, add/remove units, REST submit)
+│       └── checklist-init.js          # DOM-driven initializer (reads data-* attributes, replaces per-count scripts)
 ├── QUESTIONNAIRE.md                   # Client requirements (filled in)
 ├── AGENTS.md                          # Agent guidelines
 └── README.md                          # This file
@@ -63,9 +62,13 @@ Created automatically on plugin activation and verified on each REST submission.
 ## Shortcode
 
 ```
-[hvac_checklist units="10"]   # 10-unit split system (default)
-[hvac_checklist units="52"]   # 52-unit split system
+[hvac_checklist]
+[hvac_checklist units="10"]
+[hvac_checklist units="52"]
+[hvac_checklist units="10" max_units="99" allow_unit_add_remove="1"]
 ```
+
+Dynamic unit count (1-99). Configure via Elementor widget or shortcode attrs. Checklist items are configurable through the Elementor REPEATER control or passed via `items` JSON attribute. Supports `client_source`, `ji_wo`, `ji_contract`, `allow_wo_override`, and `enforce_assignment_lock` attributes.
 
 ## REST API
 
@@ -100,7 +103,12 @@ X-WP-Nonce: {wp_rest_nonce}
 }
 ```
 
-Response: `{"success":true, "message":"Report submitted successfully.", "submission_id":1}`
+Response: `{"success":true, "message":"Report submitted successfully.", "submission_id":1, "deal_id":5}`
+
+Additional endpoints:
+- `GET /wp-json/crm/v1/hvac/submissions` — paginated submissions list
+- `GET /wp-json/crm/v1/hvac/submissions/{id}` — single submission with units and signoffs
+- `GET /wp-json/crm/v1/hvac/client-search?q=...` — public client search
 
 ## Seeding Flow
 
@@ -109,7 +117,7 @@ Plugin activates
     → Creates hvac_* tables via Activator
     → CRM syncs module via serviceos_crm_available_modules filter
     → CRM fires serviceos_crm_module_seed filter
-    → Seeder::seed() returns 10 categories, 2 pipelines, 36 services
+    → Seeder::seed() returns 10 categories, 2 pipelines, 38 services
     → CRM creates them in DB
     → CRM sets seed_applied = 1
 ```
