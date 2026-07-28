@@ -472,11 +472,10 @@ class Public_Checklist {
             }
         }
 
-        $pipeline_name = 'Service & Repair Pipeline';
         $pipeline = $wpdb->get_row($wpdb->prepare(
             "SELECT id FROM {$wpdb->prefix}crm_pipelines
              WHERE business_id = %d AND name = %s",
-            $business_id, $pipeline_name
+            $business_id, Seeder::SERVICE_PIPELINE_NAME
         ));
 
         if (!$pipeline) {
@@ -505,7 +504,7 @@ class Public_Checklist {
             ($payload['ji_wo'] ?? 'Checklist') . ' — Submission #' . $submission_id
         );
         $deal->value       = 0;
-        $deal->status      = 'new';
+        $deal->status      = 'lead';
         $deal->milestone   = 0;
         $deal->notes       = 'Generated from HVAC Field Checklist submission #' . $submission_id;
 
@@ -668,7 +667,7 @@ class Public_Checklist {
             'ji_date'           => sanitize_text_field($payload['ji_date'] ?? ''),
             'ji_tech'           => sanitize_text_field($payload['ji_tech'] ?? ''),
             'ji_visit'          => sanitize_text_field($payload['ji_visit'] ?? ''),
-            'technician_id'     => absint($payload['technician_id'] ?? 0),
+            'technician_id'     => absint($payload['technician_id'] ?: get_current_user_id()),
             'client_id'         => !empty($payload['client_id']) ? absint($payload['client_id']) : null,
             'created_at'        => current_time('mysql'),
             'uuid'              => wp_generate_uuid4(),
