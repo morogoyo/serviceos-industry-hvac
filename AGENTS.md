@@ -49,6 +49,10 @@ Each fork uses standard naming:
 - `feature/<name>` — new features
 - `fix/<name>` — bug fixes
 
+### Merging to Main — MANUAL ONLY
+
+**Never auto-merge any PR to `main`. Never create a PR targeting `main` without explicit user authorization.** Merges to `main` are a manual process controlled by the user. The agent may only merge to `dev`. `dev` → `main` syncs happen only when explicitly requested and approved.
+
 ### Syncing Skeleton Updates
 
 When this skeleton repo receives updates:
@@ -147,3 +151,212 @@ Before pushing an industry fork:
 3. Verify list and detail pages render
 4. Verify seeded categories appear in Category dropdown
 5. Verify seeded pipeline stages appear in Pipeline view
+
+## Session Learnings — 2026-07-13 (HVAC Field Checklist Fixes)
+
+### DB Schema Compatibility
+**Always verify the actual DB schema before writing queries.** The production DB may have a different schema than what the code assumes — merged old/new columns, NOT NULL constraints without defaults, or columns from a prior questionnaire schema. Before any INSERT/UPDATE, run `SHOW COLUMNS FROM {table}` and dynamically build the query to only include columns that exist.
+
+```php
+$existing_cols = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+foreach ($all_fields as $col => $val) {
+    if (in_array($col, $existing_cols, true)) {
+        $data[$col] = $val;
+    }
+}
+$wpdb->insert($table, $data, $formats);
+```
+
+### `rest_do_request()` Return Type Handling
+`rest_do_request()` can return three different types depending on WordPress version:
+- `WP_Error` — on route match or permission failure
+- `WP_REST_Response` — older WordPress (4.4-5.x)
+- Raw array — newer WordPress (6.x+, after `response_to_data()`)
+
+**Always check with `is_wp_error()` first**, then check `instanceof WP_REST_Response` before calling response methods:
+
+```php
+$response = rest_do_request($request);
+if (is_wp_error($response)) { /* handle error */ }
+if ($response instanceof \WP_REST_Response) {
+    $data = $response->get_data();
+} else {
+    $data = $response; // already raw array
+}
+```
+
+### `$wpdb->print_error()` Corrupts REST JSON
+`$wpdb->show_errors` defaults to `true`. When a MySQL query fails, `print_error()` echoes HTML directly to the output buffer, corrupting REST API JSON responses. **Always call `$wpdb->suppress_errors(true)` before DB operations in REST handlers** and restore with `suppress_errors(false)` after.
+
+### Migration Versioning — Single Authority
+Never set the schema version in `create_tables()` — `dbDelta` is notoriously unreliable for ALTER TABLE operations on existing installs. Let `maybe_migrate_tables()` (hooked to `plugins_loaded`) be the sole authority on schema versioning. Use idempotent `SHOW COLUMNS` checks before each ALTER TABLE.
+
+```php
+// WRONG: create_tables() sets version → migration skipped
+dbDelta($tables);
+update_option('hvac_schema_version', 2);
+
+// RIGHT: only maybe_migrate_tables() sets version
+dbDelta($tables);
+// schema version set only after successful migration
+```
+
+### Local Docker Verification
+When debugging in Docker, verify the actual DB state:
+```bash
+docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW TABLES LIKE '%hvac%';"
+docker exec {container} mysql -u {user} -p{pass} {db} -e "SHOW COLUMNS FROM wp_hvac_submissions;"
+```
+
+### PR-Only Flow to Dev
+**Never push directly to `dev`.** All work must go through:
+1. Create `fix/` or `feature/` branch off `dev`
+2. Commit and push branch
+3. Create PR targeting `dev` via `gh pr create`
+4. Request user permission before `gh pr merge`
+5. Only user merges `dev` → `main`
+
+### Never `git add -A` in the CRM repo
+The CRM repo root contains Docker volume mounts (themes, uploads, other plugins) owned by Docker. `git add -A` at the repo root stages thousands of unrelated files. Always `git add {specific_file_paths}` relative to the repo root.
+
+## Session Learnings — 2026-07-14 (Collapsible Cards & Display Fixes)
+
+- **Original Schema Coexistence** — the production DB merged the original QUESTIONNAIRE.md schema with our migration schema; both column sets coexist with NOT NULL constraints on old columns. Column-aware INSERTs (`SHOW COLUMNS` → dynamic fields) are the only safe write pattern.
+- **`render_info_table()` Label Bug** — the CRM renderer only output the first column's label as `<th>`; all others were bare `<td>` values. Fix renders every `<th>` label + `<td>` value pair.
+- **Collapsible Section Pattern** — use `<details class="crm-section-card crm-collapsible-section" data-collapse-key="..." open>` with `<summary class="crm-collapsible-header">` (Material icon, label, badge, `expand_less` icon). Add a single page-level `<script>` for localStorage persistence. Flag sections with `collapsible => true`.
+- **Cross-Repo Workflow** — CRM repo changes first (renderer support), HVAC repo changes depend on CRM deployment. Two separate PRs, merge CRM first then HVAC. Keep branch names consistent across repos.
+- **Docker git Permission Issues** — Docker-owned files prevent `git reset --hard`, `git checkout`, `git stash`. Use specific file paths for `git add` and rely on `gh pr merge` for server-side merges.
+- **All Cards Must Be Collapsible** — every section card on detail/submission-detail pages must be collapsible with the standard `<details>` pattern (icon, label, badge, `expand_less`, localStorage persistence). No plain non-collapsible cards on detail pages.
+
+## Session Learnings — 2026-07-26 (Checklist Form URL & Settings Integration)
+
+### Checklist Page URL Auto-Detection
+On plugin activation, `Activator::activate()` runs `get_posts()` searching published pages/posts for `[hvac_checklist` text, stores the first matched permalink in `wp_option`: `serviceos_ip_checklist_page_url`. This makes the checklist form discoverable without hardcoding URLs.
+
+```php
+$pages = get_posts(array(
+    'post_type'   => array('page', 'post'),
+    'post_status' => 'publish',
+    's'           => '[hvac_checklist',
+    'numberposts' => 1,
+));
+if (!empty($pages)) {
+    update_option('serviceos_ip_checklist_page_url', get_permalink($pages[0]->ID));
+}
+```
+
+### Link Rendering Pattern in Harness
+The checklist form link renders as an `html` section in `get_submission_list()` — not as a `data_table` cell (which HTML-escapes all content via `esc_html()` in page-renderer.php). Use `target="_blank"` + `rel="noopener"` for external/public pages.
+
+```php
+$checklist_url = get_option('serviceos_ip_checklist_page_url', '');
+if ($checklist_url) {
+    $data['sections'][] = [
+        'type' => 'html',
+        'content' => '<a href="' . esc_url($checklist_url) . '" 
+            class="crm-btn crm-btn-secondary" target="_blank" rel="noopener">
+            Open Checklist Form ↗</a>',
+    ];
+}
+```
+
+### Manual Override via CRM Settings
+The URL can be changed in CRM Settings → "Field Checklist Form" card. Saved via `admin-post.php?action=service_os_save_checklist_url` handler (`service-os-crm.php`). Template passes `$checklist_page_url` from `render_settings()` in `class-menu.php`.
+
+### data_table Section Limitation
+The `render_data_table()` function in `page-renderer.php:429` wraps every cell in `esc_html()` — HTML links inside `data_table` rows are stripped. Always use raw `html` section type when clickable links are needed in tables.
+
+## Session Learnings — 2026-07-26 (Dynamic Elementor Checklist)
+
+### Elementor Repeater for Configurable Items
+Use `Elementor\Controls_Manager::REPEATER` for checklist task items. Pass items as JSON string through shortcode atts → PHP `render_checklist()` → `data-items` attribute → JS init. This eliminates the hardcoded `HVACChecklist.ITEMS` array in JS. Single source of truth in the widget settings.
+
+### Public REST Endpoints for Client Search
+CRM REST endpoints require `is_user_logged_in()` permission. For public-facing checklist forms accessed by non-logged-in technicians, create HVAC-specific public routes with `'permission_callback' => '__return_true'`. Query `crm_clients` table directly with `$wpdb->prepare()` using `$wpdb->esc_like()` for LIKE queries.
+
+```php
+register_rest_route('crm/v1', '/hvac/client-search', [
+    'methods' => 'GET',
+    'callback' => [__CLASS__, 'handle_client_search'],
+    'permission_callback' => '__return_true',
+]);
+```
+
+### Technician Auto-Fill from WP User
+Use `wp_get_current_user()->display_name` server-side to pre-fill the technician name field. Set `readonly` when a user is logged in. No REST call needed — rendered at shortcode evaluation time.
+
+```php
+$current_user = wp_get_current_user();
+if ($current_user && $current_user->exists()) {
+    $tech_name = $current_user->display_name;
+    $tech_readonly = ' readonly';
+}
+```
+
+### Shortcode Attribute Defaults
+The shortcode `shortcode_atts` defaults are the fallback for direct `[hvac_checklist]` usage. Widget `render()` overrides them via generated shortcode string. Always check both layers when defaults change — the widget's `get_settings_for_display()` may return `null` for controls not yet saved on existing widget instances.
+
+### Client Search Condition
+Use `$client_source !== 'none'` as the visibility condition, not `=== 'search_dropdown'`. This allows the search input to appear for `url_param` mode too (technician can override the URL-specified client).
+
+### Repeater Item Passing via Shortcode
+When passing repeater data through shortcode attrs, use `$items_json` → `esc_attr()` → embedded in shortcode string → `json_decode($atts['items'], true)` in the handler. Provide a fallback default array if JSON decoding fails or returns empty.
+
+### Debounced Client Search
+Use `setTimeout` with 250ms debounce on the search input. Fetch from `/wp-json/crm/v1/hvac/client-search?q=...` (public endpoint) rather than loading all clients upfront and filtering client-side. This avoids 403 errors on public pages.
+
+## Session Learnings — 2026-07-27 (Orphan Commit Recovery & Docs Sync)
+
+### Cherry-Picking Stale Feature Branches
+When feature branches are merged but the local copies persist, check which commits are truly missing from `dev` before deleting. Use `git log {branch} --not dev --oneline` to find orphan commits. Not all commits are safe to apply — evaluate for conflicts with subsequently merged work before cherry-picking.
+
+### Evaluating Orphan Commits for Risk
+Before applying a stray commit, check:
+1. **Does it conflict with newer merged code?** (e.g., old `checklist-core.js` with hardcoded ITEMS vs. the dynamic data-items pattern)
+2. **Does it assume methods/constants that don't exist yet?** (e.g., `Seeder::SERVICE_PIPELINE_NAME` not defined)
+3. **Does it duplicate functionality already in dev?** (e.g., pagination block already present)
+4. **Does it break existing rendering?** (e.g., removing `status_color` from unit_overview breaks page-renderer)
+
+### Cherry-Pick Conflicts Across Rewritten Code
+When a commit's base is significantly behind the current codebase (differing `submitREST()` signatures, different JS architecture), the cherry-pick will conflict heavily. **Apply changes manually** instead — identify the semantic intent of the commit and re-implement against the current code.
+
+### Delete Handler Pattern for Harness Pages
+The harness toolbar supports `['type' => 'delete', 'url' => '...', 'confirm' => '...']`. The delete handler should:
+- Live at the top of the page method, before any data fetching
+- Use `check_admin_referer()` with a unique action string
+- Delete child rows before parent (or let FK CASCADE handle it)
+- Call `$wpdb->suppress_errors(true)` around DB operations
+- Redirect via `wp_safe_redirect()` + `exit` (not `echo '<script>window.location'`)
+
+```php
+if (!empty($_GET['delete']) && absint($_GET['delete']) === 1) {
+    check_admin_referer('hvac_delete_submission_' . $submission_id);
+    global $wpdb;
+    $wpdb->suppress_errors(true);
+    $wpdb->delete($wpdb->prefix . 'hvac_signoffs', ['submission_id' => $submission_id], ['%d']);
+    $wpdb->delete($wpdb->prefix . 'hvac_unit_items', ['submission_id' => $submission_id], ['%d']);
+    $wpdb->delete($wpdb->prefix . 'hvac_submissions', ['id' => $submission_id], ['%d']);
+    $wpdb->suppress_errors(false);
+    wp_safe_redirect(admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions&deleted=1'));
+    exit;
+}
+```
+
+### Delete URL Nonce Pattern
+Use `wp_nonce_url()` to add a nonce to the delete URL in the toolbar. Pass the submission ID in the nonce action for scoped verification:
+```php
+$delete_url = wp_nonce_url(
+    admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail&delete=1&id=' . $submission_id),
+    'hvac_delete_submission_' . $submission_id
+);
+```
+
+### FK Constraints and dbDelta
+dbDelta is unreliable for ALTER TABLE on existing installs. FOREIGN KEY constraints added via `create_tables()` will only take effect on fresh plugin activations. Existing installs rely on the column-aware migration system. Always handle backward compatibility — the migration path (`maybe_migrate_tables`) is the sole authority on schema versions.
+
+### Branch Hygiene After Merges
+After all feature branches are merged:
+1. Delete local branches: `git branch -D {merged-branch}`
+2. Delete remote branches: `git push origin --delete {branch}`
+3. Delete merged feature branch remotes (merged PRs auto-delete their branches on GitHub, but manual pushes leave remotes)
+4. Verify clean state: `git branch -a` should show only `dev`, `main`, and `upstream/main`
