@@ -35,6 +35,9 @@ HVAC-specific module for [ServiceOS CRM](https://github.com/morogoyo/wp_crm_gene
 │   └── widgets/
 │       └── class-hvac-checklist-widget.php  # Elementor widget with REPEATER controls
 ├── templates/
+│   ├── checklist-10.php               # [hvac_field_checklist_10] 10-unit field form
+│   ├── checklist-52.php               # [hvac_field_checklist_52] 52-unit field form
+│   ├── field-form.php                 # Shared markup for the two fixed field forms
 │   └── email-report.php               # HTML email template for checklist reports
 ├── assets/
 │   ├── css/
@@ -67,6 +70,15 @@ Created automatically on plugin activation and verified on each REST submission.
 [hvac_checklist units="52"]
 [hvac_checklist units="10" max_units="99" allow_unit_add_remove="1"]
 ```
+
+```
+[hvac_field_checklist_10]
+[hvac_field_checklist_52]
+```
+
+The 10-unit and 52-unit field forms have a fixed unit count and submit to the same `POST /crm/v1/hvac/checklist-submit` save path.
+
+All three shortcodes and the four `/crm/v1/hvac/*` REST routes (`checklist-submit`, `submissions`, `submissions/<id>`, `client-search`) register only while the `hvac` module row exists with `is_enabled = 1`. Checklist CSS/JS also load only then.
 
 Dynamic unit count (1-99). Configure via Elementor widget or shortcode attrs. Checklist items are configurable through the Elementor REPEATER control or passed via `items` JSON attribute. Supports `client_source`, `ji_wo`, `ji_contract`, `allow_wo_override`, and `enforce_assignment_lock` attributes.
 
