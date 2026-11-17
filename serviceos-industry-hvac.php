@@ -34,6 +34,7 @@ add_action('plugins_loaded', function () {
 
     ServiceOS_Industry_Plugin\Seeder::register();
     ServiceOS_Industry_Plugin\Assets::register();
+    ServiceOS_Industry_Plugin\Harness::register_admin_hooks();
 
     add_action('init', function () {
         $harness = new ServiceOS_Industry_Plugin\Harness();
