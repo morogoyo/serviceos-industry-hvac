@@ -7,14 +7,50 @@ if (!defined('ABSPATH')) {
 
 class Public_Checklist {
 
+    const MODULE_SLUG = 'hvac';
+
     public static function register() {
-        add_shortcode('hvac_checklist', [__CLASS__, 'render_checklist']);
+        // Shortcodes wait until init 100 so the harness (init 99) has registered the module row.
+        add_action('init', [__CLASS__, 'register_shortcodes'], 100);
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
         add_action('plugins_loaded', [__CLASS__, 'maybe_migrate_tables']);
     }
 
+    /**
+     * True only when core is loaded and the hvac module row exists with is_enabled = 1.
+     * Read-only: never writes is_enabled.
+     */
+    public static function is_module_enabled() {
+        if (!class_exists('Service_OS_CRM\\Services\\Module_Service')) {
+            return false;
+        }
+
+        try {
+            $service = new \Service_OS_CRM\Services\Module_Service();
+            $module  = $service->get_by_slug(self::MODULE_SLUG);
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return !empty($module) && (int) $module->is_enabled === 1;
+    }
+
+    public static function register_shortcodes() {
+        if (!self::is_module_enabled()) {
+            return;
+        }
+
+        add_shortcode('hvac_checklist', [__CLASS__, 'render_checklist']);
+        add_shortcode('hvac_field_checklist_10', [__CLASS__, 'render_field_checklist_10']);
+        add_shortcode('hvac_field_checklist_52', [__CLASS__, 'render_field_checklist_52']);
+    }
+
     public static function register_routes() {
+        if (!self::is_module_enabled()) {
+            return;
+        }
+
         register_rest_route('crm/v1', '/hvac/checklist-submit', [
             'methods' => 'POST',
             'callback' => [__CLASS__, 'handle_submission'],
@@ -38,6 +74,57 @@ class Public_Checklist {
             'callback' => [__CLASS__, 'handle_client_search'],
             'permission_callback' => '__return_true',
         ]);
+    }
+
+    /**
+     * Default per-unit checklist items shared by [hvac_checklist] and the fixed field forms.
+     */
+    private static function default_items() {
+        return [
+            ['item_label' => __('Evaporator coil — light inspect & surface clean', 'serviceos-industry-hvac')],
+            ['item_label' => __('Flush and treat condensate drain lines', 'serviceos-industry-hvac')],
+            ['item_label' => __('Inspect control systems and safety devices', 'serviceos-industry-hvac')],
+            ['item_label' => __('Check contactors and electrical components', 'serviceos-industry-hvac')],
+            ['item_label' => __('Replace all air filters (included)', 'serviceos-industry-hvac')],
+            ['item_label' => __('Inspect condenser fan blades and motors', 'serviceos-industry-hvac')],
+            ['item_label' => __('Check refrigerant levels and system condition', 'serviceos-industry-hvac')],
+            ['item_label' => __('Inspect for visible leaks / abnormal condensation', 'serviceos-industry-hvac')],
+            ['item_label' => __('Evaluate overall system performance', 'serviceos-industry-hvac')],
+            ['item_label' => __('Service report provided after visit', 'serviceos-industry-hvac')],
+        ];
+    }
+
+    public static function render_field_checklist_10($atts = []) {
+        return self::render_field_template('checklist-10.php', 10, 'hvac10_', 'hvac_10unit_v1');
+    }
+
+    public static function render_field_checklist_52($atts = []) {
+        return self::render_field_template('checklist-52.php', 52, 'hvac52_', 'hvac_52unit_v1');
+    }
+
+    /**
+     * Render a fixed-size field form. Submit goes through checklist-core.js to
+     * POST /crm/v1/hvac/checklist-submit, the same save path as [hvac_checklist].
+     */
+    private static function render_field_template($file, $unit_count, $wid_prefix, $storage_key) {
+        $wid        = $wid_prefix . uniqid();
+        $items      = array_map(function ($it) {
+            return $it['item_label'];
+        }, self::default_items());
+        $item_count = count($items);
+        $total_items = $unit_count * $item_count;
+
+        $settings       = get_option('hvac_settings', []);
+        $company        = $settings['company'] ?? 'ServicePro Field';
+        $recipient_name = $settings['recipient_name'] ?? 'the administrator';
+        $phone          = $settings['phone'] ?? '';
+        $website        = $settings['website'] ?? '';
+        $rest_url       = rest_url('crm/v1/hvac/checklist-submit');
+        $nonce          = wp_create_nonce('wp_rest');
+
+        ob_start();
+        include SERVICEOS_IP_PATH . 'templates/' . $file;
+        return ob_get_clean();
     }
 
     public static function render_checklist($atts) {
@@ -74,18 +161,7 @@ class Public_Checklist {
 
         $items_raw = json_decode($atts['items'], true);
         if (!is_array($items_raw) || empty($items_raw)) {
-            $items_raw = [
-                ['item_label' => __('Evaporator coil — light inspect & surface clean', 'serviceos-industry-hvac')],
-                ['item_label' => __('Flush and treat condensate drain lines', 'serviceos-industry-hvac')],
-                ['item_label' => __('Inspect control systems and safety devices', 'serviceos-industry-hvac')],
-                ['item_label' => __('Check contactors and electrical components', 'serviceos-industry-hvac')],
-                ['item_label' => __('Replace all air filters (included)', 'serviceos-industry-hvac')],
-                ['item_label' => __('Inspect condenser fan blades and motors', 'serviceos-industry-hvac')],
-                ['item_label' => __('Check refrigerant levels and system condition', 'serviceos-industry-hvac')],
-                ['item_label' => __('Inspect for visible leaks / abnormal condensation', 'serviceos-industry-hvac')],
-                ['item_label' => __('Evaluate overall system performance', 'serviceos-industry-hvac')],
-                ['item_label' => __('Service report provided after visit', 'serviceos-industry-hvac')],
-            ];
+            $items_raw = self::default_items();
         }
         $item_labels = array_map(function($it) {
             return $it['item_label'] ?? '';
@@ -282,7 +358,19 @@ class Public_Checklist {
 
     public static function enqueue_assets() {
         global $post;
-        if (!is_a($post, 'WP_Post') || !has_shortcode($post->post_content, 'hvac_checklist')) {
+        if (!is_a($post, 'WP_Post')) {
+            return;
+        }
+
+        // has_shortcode() is false for unregistered tags, so a disabled module loads nothing.
+        $has_form = false;
+        foreach (['hvac_checklist', 'hvac_field_checklist_10', 'hvac_field_checklist_52'] as $tag) {
+            if (has_shortcode($post->post_content, $tag)) {
+                $has_form = true;
+                break;
+            }
+        }
+        if (!$has_form) {
             return;
         }
 

@@ -757,3 +757,8 @@
   min-height: 44px;
 }
 .hvac-btn-remove-unit:hover { background: var(--red-lt); color: var(--red); }
+
+/* Fixed-size field forms ([hvac_field_checklist_10] / [hvac_field_checklist_52]) have a set unit count. */
+.hvac-wrap-fixed .hvac-btn-remove-unit {
+  display: none !important;
+}
