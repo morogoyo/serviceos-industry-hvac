@@ -9,6 +9,32 @@ class Harness extends Service_OS_CRM_Harness {
     protected $module_icon = 'ac_unit';
     protected $industry = 'HVAC';
 
+    public static function register_admin_hooks(): void {
+        add_action('admin_post_serviceos_hvac_save_checklist_url', [__CLASS__, 'handle_save_checklist_url']);
+        add_filter('serviceos_crm_redirect_map', [__CLASS__, 'filter_redirect_map']);
+    }
+
+    public static function filter_redirect_map($map) {
+        if (!is_array($map)) {
+            $map = [];
+        }
+        $map['hvac-submissions'] = 'service-os-crm-module-hvac';
+        return $map;
+    }
+
+    public static function handle_save_checklist_url(): void {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html__('You do not have permission to do this.', 'serviceos-industry-hvac'), '', ['response' => 403]);
+        }
+        check_admin_referer('serviceos_hvac_save_checklist_url');
+
+        $url = isset($_POST['checklist_url']) ? esc_url_raw(wp_unslash($_POST['checklist_url'])) : '';
+        update_option('serviceos_ip_checklist_page_url', $url);
+
+        wp_safe_redirect(admin_url('admin.php?page=service-os-crm-module-hvac&action=submissions'));
+        exit;
+    }
+
     protected function get_module_info(): array {
         return [
             'name' => $this->module_name,
@@ -266,6 +292,20 @@ class Harness extends Service_OS_CRM_Harness {
                 'content' => '<a href="' . esc_url($checklist_url) . '" class="crm-btn crm-btn-secondary" target="_blank" rel="noopener" style="margin-bottom:12px;">Open Checklist Form &#x2197;</a>',
             ];
         }
+
+        $data['sections'][] = [
+            'type' => 'html',
+            'content' => '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="crm-card crm-section-card" style="margin-bottom:12px;">'
+                . '<h3 class="crm-section-label">Checklist Page URL</h3>'
+                . '<input type="hidden" name="action" value="serviceos_hvac_save_checklist_url">'
+                . wp_nonce_field('serviceos_hvac_save_checklist_url', '_wpnonce', true, false)
+                . '<div class="crm-form-group">'
+                . '<label for="hvac-checklist-url">Public page that holds the checklist form</label>'
+                . '<input type="url" id="hvac-checklist-url" name="checklist_url" value="' . esc_attr($checklist_url) . '" placeholder="https://example.com/field-checklist/">'
+                . '</div>'
+                . '<button type="submit" class="crm-btn crm-btn-secondary">Save URL</button>'
+                . '</form>',
+        ];
 
         $detail_url = admin_url('admin.php?page=service-os-crm-module-hvac&action=submission-detail');
 
